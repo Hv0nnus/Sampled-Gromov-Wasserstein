@@ -1,1 +1,0 @@
-# Sampled-Gromov-Wasserstein
