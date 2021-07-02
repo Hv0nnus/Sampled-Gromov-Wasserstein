@@ -106,226 +106,220 @@ def GW_init_T(N, K, T_is_sparse=False):
             T = np.arange(N)
         else:
             T = np.eye(N)
-    # T = np.array([0]*10 + [1]*10 + [2]*10)
-    # T = np.array([0, 1, 2]*10)
-    # T = np.arange(N)
-    # T = np.random.permutation(N)
-    # for i in range(len(T)):
-    #     T[i] = 1
     return T
 
 
-def GW_update_T(C1, C2, loss_fun, T,
-                iter_epsilon=1, nb_iter_batch=10,
-                batch_size=None,
-                constraint=False,
-                epsilon_init=0,
-                T_is_sparse=False,
-                KL=False,
-                nb_iter_global=(0, 1),
-                verbose=False,
-                epsilon_min=0.01):
-    stop = False
-
-    if batch_size is None:
-        batch_size = [C1.shape[0], C1.shape[1], C2.shape[0], C2.shape[1]]
-    else:
-        for i in range(len(batch_size)):
-            if batch_size[i] is None:
-                batch_size[i] = np.inf
-
-    for i in range(2):
-        batch_size[i] = min(batch_size[i], C1.shape[i])
-        batch_size[i + 2] = min(batch_size[i + 2], C2.shape[i])
-    batch_size = np.array(batch_size, dtype=int)
-    rng = default_rng(np.random.randint(0, 10000))
-
-    for e in range(iter_epsilon):
-        epsilon = epsilon_init * ((1 - ((nb_iter_global[0] * iter_epsilon) + e)
-                                   / (nb_iter_global[1] * iter_epsilon)) ** 3 + epsilon_min)
-        print("epsilon", epsilon)
-        for iter_batch in range(nb_iter_batch):
-            previous_T = T.copy()
-
-            if T_is_sparse:
-                i_pos = rng.choice(C1.shape[0], size=batch_size[0], replace=False)
-                j_pos = rng.choice(C1.shape[1], size=batch_size[1], replace=False)
-
-                a = C2[:, np.newaxis, :]
-                b = C1[:, j_pos, np.newaxis]
-                L_jl = np.sum(loss_fun(b[i_pos], a[T[i_pos]]), axis=0) / batch_size[0]
-                loss = np.sum(L_jl[np.arange(batch_size[1]), T[j_pos]]) / batch_size[0]
-
-                if verbose:
-                    print(iter_batch, ":", loss, "(batched)")
-
-                if not constraint:
-                    if epsilon == 0:
-                        T[j_pos] = np.argmin(L_jl, axis=1)
-                    else:
-                        new_T = np.exp(-L_jl / epsilon)
-                        new_T /= np.sum(new_T, axis=1, keepdims=True)
-                        T[j_pos] = sparsification_of_T(new_T)
-                else:
-                    if epsilon == 0:
-                        new_T = emd(a=np.ones(L_jl.shape[0]) / L_jl.shape[0],
-                                    b=np.ones(L_jl.shape[1]) / L_jl.shape[1],
-                                    M=L_jl)
-                    else:
-                        new_T = sinkhorn(a=np.ones(L_jl.shape[0]) / L_jl.shape[0],
-                                         b=np.ones(L_jl.shape[1]) / L_jl.shape[1],
-                                         M=L_jl,
-                                         reg=epsilon)
-
-                    T[j_pos] = sparsification_of_T(new_T)
-            else:
-                if True:
-                    repeat = False
-                    if repeat:
-                        i_pos = np.random.randint(0, C1.shape[0], batch_size[0])
-                        if batch_size[2] != 1:
-                            print("The sample is not perfect as batch_size[2] is not egal to 1")
-                    else:
-                        i_pos = rng.choice(C1.shape[0], size=batch_size[0], replace=False)
-                    # Maybe not the smartest way... avoid a loop but the search for the position is in O(n) !
-                    T_cumsum = T[i_pos].cumsum(axis=1) * len(T)
-                    rdm_integer_i = np.random.rand(batch_size[0], 1, batch_size[2])
-                    k_pos = T_cumsum[:, :, np.newaxis] < rdm_integer_i
-                    # print(rdm_integer_i)
-                    k_pos = k_pos.sum(axis=1).reshape(-1)
-                    i_pos = np.repeat(i_pos, batch_size[2])
-                else:
-                    index = [[0] * (dimension_OT - 1), [0] * (dimension_OT - 1)]
-                    for d in range(dimension_OT - 1):
-                        index[0][d] = np.random.choice(T.shape[0],
-                                                       size=batch_size[0, d],
-                                                       replace=repeat)
-                        for index_0_d_i in index[0][d]:
-                            index[1][d] = np.random.choice(T.shape[1],
-                                                           size=batch_size[1, d],
-                                                           replace=repeat,
-                                                           p=T[index_0_d_i, :])
-                # i_pos = np.arange(C1.shape[0])
-                # k_pos = np.arange(C2.shape[0])
-                # k_pos = np.tile(k_pos, batch_size[2])
-                #
-                # i_pos = np.repeat(i_pos, batch_size[2])
-                # T = np.eye(3)
-                # print(i_pos)
-                # print(k_pos)
-
-                # For the moment j and l are keeped full.
-                # j_pos = rng.choice(C1.shape[1], size=batch_size[1], replace=False)
-                # l_pos = rng.choice(C2.shape[1], size=batch_size[3], replace=False)
-                # print("T",T)
-                # L_ijkl = loss_fun(C1[:, :, np.newaxis, np.newaxis], C2[np.newaxis, np.newaxis, :, :])
-                # L_jl = np.einsum("ijkl,ik->jl", L_ijkl, T)
-                # print("my sum", L_ijkl[0, :, 0, :] + L_ijkl[1, :, 1, :] + L_ijkl[2, :, 2, :])
-                # print("L_ijkl", L_jl)
-                # print(L_jl)
-                # L_jl_copy = L_jl.copy()
-                # if verbose:
-                #     loss = np.sum(L_jl * T)
-                #     print("Loss", loss)
-                # print("C1", C1)
-                # print("C2", C2)
-                if False:
-                    learning_step = np.sum(T[i_pos, k_pos])
-                else:
-                    learning_step = (batch_size[0] * batch_size[2]) / (C1.shape[0] * C2.shape[0])
-
-                if batch_size[0] == 1 and batch_size[2] == 1 and epsilon == 0 \
-                        and (KL is None or KL is False) and constraint:
-                    print("Very special case, kind of sliced, do not work in every case")
-                    C1_sort = C1[i_pos[0]].argsort()
-                    C2_sort = C1[k_pos[0]].argsort()
-
-                    n, m = C2.shape[0], C1.shape[0]
-                    weights = np.zeros((2, m))
-
-                    ratio = n / m
-
-                    # fix array that depend on the value of n and m. We are only interested at the order and at the
-                    # number of point that should be send from one distribution to the other.
-                    # n = 2, m = 5 give [0, 0, 0, 1, 1] for the perm_global and [., ., 1, ., . ] for 2
-                    # All the masse of the the first 2 points are send to the points 0.
-                    # and only a fraction (computed in weights) of the 3rd points are send to 0 because perm_global_2
-                    # has a value.
-                    # In fact perm_global_2 have some value at every position.
-                    # But it is associated with 0 in weights[1].
-
-                    # I recomande to take example (n = 7, m=16 for instance) to understand this part.
-                    arange_1 = np.int_(np.arange(1, n + 1, ratio)) / n
-                    arange_2 = np.arange(1, m + 1) / m
-                    perm_global = np.int_(np.arange(0, n, ratio))
-                    perm_global_2 = np.minimum(perm_global + 1, n - 1)
-
-                    a1_a2 = arange_1 - arange_2
-                    # weights[0, i] associated to the transport of
-                    # the points i in X1 to the points X2 define in perm_global
-                    # weights[1, i] associated to the transport of
-                    #  the points i in X1 to the points X2 define in perm_global_2
-                    weights[0] = (1 / m) * (0 <= a1_a2) + (1 / m + a1_a2) * (0 > a1_a2)
-                    weights[1] = np.abs(a1_a2) * (0 > a1_a2)
-
-                    new_T = np.zeros_like(T)
-                    new_T[C1_sort, C2_sort[perm_global]] = weights[0]
-                    new_T[C1_sort, C2_sort[perm_global_2]] += weights[1]
-
-                    T = (T + learning_step * new_T) / (1 + learning_step)
-                    continue
-
-                a = C1[i_pos]
-                b = C2[k_pos]
-                L_jl = np.mean(loss_fun(a[:, :, np.newaxis], b[:, np.newaxis, :]), axis=0)
-
-                # if True: #tempo
-                #     L_jl = np.sum(loss_fun(a[:, :, np.newaxis], b[:, np.newaxis, :]) * \
-                #     T[i_pos, k_pos].reshape(-1, 1, 1),
-                #                   axis=0)
-                loss = np.sum(L_jl * T)
-                if verbose:
-                    print(iter_batch, ":", loss, "(batched)")
-                # print("L_jl.sum()", L_jl)
-                # print("DIVISION OF L", L_jl/L_jl_copy)
-                if KL is not None:
-                    L_jl = L_jl - epsilon * KL * np.log(T)
-
-                if not constraint:
-                    if epsilon == 0:
-                        new_T = (np.min(L_jl, axis=1, keepdims=True) == L_jl) * 1
-                        new_T = new_T / (new_T.min(axis=1, keepdims=True) * T.shape[0])
-                    else:
-                        new_T = np.exp(-L_jl / epsilon)
-                        new_T /= np.sum(new_T, axis=1, keepdims=True) * T.shape[0]
-                else:
-                    if epsilon == 0:
-                        new_T = emd(a=np.ones(L_jl.shape[0]) / L_jl.shape[0],
-                                    b=np.ones(L_jl.shape[1]) / L_jl.shape[1],
-                                    M=L_jl)
-                    else:
-                        new_T = sinkhorn(a=np.ones(L_jl.shape[0]) / L_jl.shape[0],
-                                         b=np.ones(L_jl.shape[1]) / L_jl.shape[1],
-                                         M=L_jl,
-                                         reg=epsilon)
-                new_T = new_T / new_T.sum()
-                if KL is None or KL is False or epsilon == 0:
-                    # print("sum new_T", new_T.sum())
-                    # print("sum T", T.sum())
-
-                    T = (T + learning_step * new_T) / (1 + learning_step)
-                    # print(T)
-                else:
-                    T = new_T
-
-                print("Difference between 2 iterations", ((T - previous_T) ** 2).sum())
-            if np.all(previous_T == T):
-                stop = True
-                print("stop")
-                break
-        if stop:
-            break
-    return T
+# def GW_update_T(C1, C2, loss_fun, T,
+#                 iter_epsilon=1, nb_iter_batch=10,
+#                 batch_size=None,
+#                 constraint=False,
+#                 epsilon_init=0,
+#                 T_is_sparse=False,
+#                 KL=False,
+#                 nb_iter_global=(0, 1),
+#                 verbose=False,
+#                 epsilon_min=0.01):
+#     stop = False
+#
+#     if batch_size is None:
+#         batch_size = [C1.shape[0], C1.shape[1], C2.shape[0], C2.shape[1]]
+#     else:
+#         for i in range(len(batch_size)):
+#             if batch_size[i] is None:
+#                 batch_size[i] = np.inf
+#
+#     for i in range(2):
+#         batch_size[i] = min(batch_size[i], C1.shape[i])
+#         batch_size[i + 2] = min(batch_size[i + 2], C2.shape[i])
+#     batch_size = np.array(batch_size, dtype=int)
+#     rng = default_rng(np.random.randint(0, 10000))
+#
+#     for e in range(iter_epsilon):
+#         epsilon = epsilon_init * ((1 - ((nb_iter_global[0] * iter_epsilon) + e)
+#                                    / (nb_iter_global[1] * iter_epsilon)) ** 3 + epsilon_min)
+#         print("epsilon", epsilon)
+#         for iter_batch in range(nb_iter_batch):
+#             previous_T = T.copy()
+#
+#             if T_is_sparse:
+#                 i_pos = rng.choice(C1.shape[0], size=batch_size[0], replace=False)
+#                 j_pos = rng.choice(C1.shape[1], size=batch_size[1], replace=False)
+#
+#                 a = C2[:, np.newaxis, :]
+#                 b = C1[:, j_pos, np.newaxis]
+#                 L_jl = np.sum(loss_fun(b[i_pos], a[T[i_pos]]), axis=0) / batch_size[0]
+#                 loss = np.sum(L_jl[np.arange(batch_size[1]), T[j_pos]]) / batch_size[0]
+#
+#                 if verbose:
+#                     print(iter_batch, ":", loss, "(batched)")
+#
+#                 if not constraint:
+#                     if epsilon == 0:
+#                         T[j_pos] = np.argmin(L_jl, axis=1)
+#                     else:
+#                         new_T = np.exp(-L_jl / epsilon)
+#                         new_T /= np.sum(new_T, axis=1, keepdims=True)
+#                         T[j_pos] = sparsification_of_T(new_T)
+#                 else:
+#                     if epsilon == 0:
+#                         new_T = emd(a=np.ones(L_jl.shape[0]) / L_jl.shape[0],
+#                                     b=np.ones(L_jl.shape[1]) / L_jl.shape[1],
+#                                     M=L_jl)
+#                     else:
+#                         new_T = sinkhorn(a=np.ones(L_jl.shape[0]) / L_jl.shape[0],
+#                                          b=np.ones(L_jl.shape[1]) / L_jl.shape[1],
+#                                          M=L_jl,
+#                                          reg=epsilon)
+#
+#                     T[j_pos] = sparsification_of_T(new_T)
+#             else:
+#                 if True:
+#                     repeat = False
+#                     if repeat:
+#                         i_pos = np.random.randint(0, C1.shape[0], batch_size[0])
+#                         if batch_size[2] != 1:
+#                             print("The sample is not perfect as batch_size[2] is not egal to 1")
+#                     else:
+#                         i_pos = rng.choice(C1.shape[0], size=batch_size[0], replace=False)
+#                     # Maybe not the smartest way... avoid a loop but the search for the position is in O(n) !
+#                     T_cumsum = T[i_pos].cumsum(axis=1) * len(T)
+#                     rdm_integer_i = np.random.rand(batch_size[0], 1, batch_size[2])
+#                     k_pos = T_cumsum[:, :, np.newaxis] < rdm_integer_i
+#                     # print(rdm_integer_i)
+#                     k_pos = k_pos.sum(axis=1).reshape(-1)
+#                     i_pos = np.repeat(i_pos, batch_size[2])
+#                 else:
+#                     index = [[0] * (dimension_OT - 1), [0] * (dimension_OT - 1)]
+#                     for d in range(dimension_OT - 1):
+#                         index[0][d] = np.random.choice(T.shape[0],
+#                                                        size=batch_size[0, d],
+#                                                        replace=repeat)
+#                         for index_0_d_i in index[0][d]:
+#                             index[1][d] = np.random.choice(T.shape[1],
+#                                                            size=batch_size[1, d],
+#                                                            replace=repeat,
+#                                                            p=T[index_0_d_i, :])
+#                 # i_pos = np.arange(C1.shape[0])
+#                 # k_pos = np.arange(C2.shape[0])
+#                 # k_pos = np.tile(k_pos, batch_size[2])
+#                 #
+#                 # i_pos = np.repeat(i_pos, batch_size[2])
+#                 # T = np.eye(3)
+#                 # print(i_pos)
+#                 # print(k_pos)
+#
+#                 # For the moment j and l are keeped full.
+#                 # j_pos = rng.choice(C1.shape[1], size=batch_size[1], replace=False)
+#                 # l_pos = rng.choice(C2.shape[1], size=batch_size[3], replace=False)
+#                 # print("T",T)
+#                 # L_ijkl = loss_fun(C1[:, :, np.newaxis, np.newaxis], C2[np.newaxis, np.newaxis, :, :])
+#                 # L_jl = np.einsum("ijkl,ik->jl", L_ijkl, T)
+#                 # print("my sum", L_ijkl[0, :, 0, :] + L_ijkl[1, :, 1, :] + L_ijkl[2, :, 2, :])
+#                 # print("L_ijkl", L_jl)
+#                 # print(L_jl)
+#                 # L_jl_copy = L_jl.copy()
+#                 # if verbose:
+#                 #     loss = np.sum(L_jl * T)
+#                 #     print("Loss", loss)
+#                 # print("C1", C1)
+#                 # print("C2", C2)
+#                 if False:
+#                     learning_step = np.sum(T[i_pos, k_pos])
+#                 else:
+#                     learning_step = (batch_size[0] * batch_size[2]) / (C1.shape[0] * C2.shape[0])
+#
+#                 if batch_size[0] == 1 and batch_size[2] == 1 and epsilon == 0 \
+#                         and (KL is None or KL is False) and constraint:
+#                     print("Very special case, kind of sliced, do not work in every case")
+#                     C1_sort = C1[i_pos[0]].argsort()
+#                     C2_sort = C1[k_pos[0]].argsort()
+#
+#                     n, m = C2.shape[0], C1.shape[0]
+#                     weights = np.zeros((2, m))
+#
+#                     ratio = n / m
+#
+#                     # fix array that depend on the value of n and m. We are only interested at the order and at the
+#                     # number of point that should be send from one distribution to the other.
+#                     # n = 2, m = 5 give [0, 0, 0, 1, 1] for the perm_global and [., ., 1, ., . ] for 2
+#                     # All the masse of the the first 2 points are send to the points 0.
+#                     # and only a fraction (computed in weights) of the 3rd points are send to 0 because perm_global_2
+#                     # has a value.
+#                     # In fact perm_global_2 have some value at every position.
+#                     # But it is associated with 0 in weights[1].
+#
+#                     # I recomande to take example (n = 7, m=16 for instance) to understand this part.
+#                     arange_1 = np.int_(np.arange(1, n + 1, ratio)) / n
+#                     arange_2 = np.arange(1, m + 1) / m
+#                     perm_global = np.int_(np.arange(0, n, ratio))
+#                     perm_global_2 = np.minimum(perm_global + 1, n - 1)
+#
+#                     a1_a2 = arange_1 - arange_2
+#                     # weights[0, i] associated to the transport of
+#                     # the points i in X1 to the points X2 define in perm_global
+#                     # weights[1, i] associated to the transport of
+#                     #  the points i in X1 to the points X2 define in perm_global_2
+#                     weights[0] = (1 / m) * (0 <= a1_a2) + (1 / m + a1_a2) * (0 > a1_a2)
+#                     weights[1] = np.abs(a1_a2) * (0 > a1_a2)
+#
+#                     new_T = np.zeros_like(T)
+#                     new_T[C1_sort, C2_sort[perm_global]] = weights[0]
+#                     new_T[C1_sort, C2_sort[perm_global_2]] += weights[1]
+#
+#                     T = (T + learning_step * new_T) / (1 + learning_step)
+#                     continue
+#
+#                 a = C1[i_pos]
+#                 b = C2[k_pos]
+#                 L_jl = np.mean(loss_fun(a[:, :, np.newaxis], b[:, np.newaxis, :]), axis=0)
+#
+#                 # if True: #tempo
+#                 #     L_jl = np.sum(loss_fun(a[:, :, np.newaxis], b[:, np.newaxis, :]) * \
+#                 #     T[i_pos, k_pos].reshape(-1, 1, 1),
+#                 #                   axis=0)
+#                 loss = np.sum(L_jl * T)
+#                 if verbose:
+#                     print(iter_batch, ":", loss, "(batched)")
+#                 # print("L_jl.sum()", L_jl)
+#                 # print("DIVISION OF L", L_jl/L_jl_copy)
+#                 if KL is not None:
+#                     L_jl = L_jl - epsilon * KL * np.log(T)
+#
+#                 if not constraint:
+#                     if epsilon == 0:
+#                         new_T = (np.min(L_jl, axis=1, keepdims=True) == L_jl) * 1
+#                         new_T = new_T / (new_T.min(axis=1, keepdims=True) * T.shape[0])
+#                     else:
+#                         new_T = np.exp(-L_jl / epsilon)
+#                         new_T /= np.sum(new_T, axis=1, keepdims=True) * T.shape[0]
+#                 else:
+#                     if epsilon == 0:
+#                         new_T = emd(a=np.ones(L_jl.shape[0]) / L_jl.shape[0],
+#                                     b=np.ones(L_jl.shape[1]) / L_jl.shape[1],
+#                                     M=L_jl)
+#                     else:
+#                         new_T = sinkhorn(a=np.ones(L_jl.shape[0]) / L_jl.shape[0],
+#                                          b=np.ones(L_jl.shape[1]) / L_jl.shape[1],
+#                                          M=L_jl,
+#                                          reg=epsilon)
+#                 new_T = new_T / new_T.sum()
+#                 if KL is None or KL is False or epsilon == 0:
+#                     # print("sum new_T", new_T.sum())
+#                     # print("sum T", T.sum())
+#
+#                     T = (T + learning_step * new_T) / (1 + learning_step)
+#                     # print(T)
+#                 else:
+#                     T = new_T
+#
+#                 print("Difference between 2 iterations", ((T - previous_T) ** 2).sum())
+#             if np.all(previous_T == T):
+#                 stop = True
+#                 print("stop")
+#                 break
+#         if stop:
+#             break
+#     return T
 
 
 def sparsify_T(T, number_point_to_keep=None, threshold=None):
@@ -356,46 +350,6 @@ def compute_distance_sparse(C1, C2, loss_fun, T, dim_T):
     return s / np.sum(T[2])
 
 
-# def compute_distance_sampling2(C1, C2, loss_fun, T, number_sample=None):
-#     if number_sample is None:
-#         if T.shape[0] == T.shape[1]:
-#             number_sample = 1
-#         else:
-#             number_sample = 2
-#     s = 0
-#     index = np.zeros((T.shape[0], number_sample), dtype=int)
-#
-#     for i in range(T.shape[0]): # this loop is needed with in high dimension to avoid memory problem.
-#         index[i] = np.random.choice(T.shape[1], size=number_sample,
-#                                     p=T[i, :] * T.shape[0])
-#         s += np.mean(loss_fun(C1([[i]]), C2(index[np.newaxis, i, :])), axis=(0))
-#     s = np.sum(s * T) / T.shape[0]
-#     return s
-#
-#
-# def compute_distance_sampling(C1, C2, loss_fun, T, number_sample=None, std=False):
-#     if number_sample is None:
-#         if T.shape[0] == T.shape[1]:
-#             number_sample = T.shape[0]
-#         else:
-#             number_sample = 2 * max(T.shape[0], T.shape[1])
-#
-#     list_value_sample = np.zeros(number_sample)
-#
-#     index = np.random.choice(T.shape[0], size=number_sample, replace=True)
-#
-#     for i, index_i in enumerate(index):
-#         # this loop is needed with in high dimension to avoid memory problem.
-#         pos = np.random.choice(T.shape[1], size=1,
-#                                p=T[index_i, :] * T.shape[0])
-#         list_value_sample[i] = (loss_fun(C1([[index_i]]), C2([pos])).squeeze() * T).sum()
-#
-#     if std:
-#         return np.mean(list_value_sample), np.std(list_value_sample)
-#     else:
-#         return np.mean(list_value_sample)
-
-
 def compute_distance_sampling_both(C1, C2, loss_fun, T, number_sample=None, std=False, std_total=False):
 
     if T.shape[0] < T.shape[1]:
@@ -423,17 +377,9 @@ def compute_distance_sampling_both(C1, C2, loss_fun, T, number_sample=None, std=
                                                       index_l[:, :, n].T.reshape(-1)]).reshape(T.shape[0], T.shape[0]))
     else:
         for n in range(number_sample):
-            # print((C1([np.arange(T.shape[0])]).reshape(T.shape[0], T.shape[0])).shape)
-            # print((index_k[:, :, n].reshape(-1).shape,
-            #       index_l[:, :, n].T.reshape(-1).shape))
-            # print((C2([index_k[:, :, n].reshape(-1)],
-            #           index_l[:, :, n].T.reshape(-1))).shape)
-            # print((C2([index_k[:, :, n].reshape(-1)],
-            #           index_l[:, :, n].T.reshape(-1)).reshape(T.shape[0], T.shape[0])).shape)
             list_value_sample[:, :, n] = loss_fun(C1([np.arange(T.shape[0])]).reshape(T.shape[0], T.shape[0]),
                                                   C2([index_k[:, :, n].reshape(-1)],
                                                      index_l[:, :, n].T.reshape(-1)).reshape(T.shape[0], T.shape[0]))
-    # print(list_value_sample[:, :, 0] - list_value_sample[:, :, 1])
     if std:
         std_value = np.sum(np.std(list_value_sample, axis=2) ** 2) ** 0.5
         print(std_value / (T.shape[0] * T.shape[0]))
@@ -587,24 +533,26 @@ def sliced_n_m(n, m):
 
 
 def Generalisation_OT(C1, C2, loss_fun, T,  # C1 and C2 can be function
-                      dimension_OT=2,  # 1 for OT 2 for Gromov.
-                      iter_epsilon=1, nb_iter_batch=10,
-                      batch_size=None,
-                      constraint=True,
-                      epsilon_init=0,
+                      dimension_OT=2,  # 1 for OT 2 for Gromov
+                      iter_epsilon=500,  # Number of out iterations
+                      nb_iter_batch=1,  # Similar to iter_epsilon if the entropy is not modified
+                      batch_size=None,  # Number of sampled matrices at each iterations
+                      constraint=True,  # True = OT, False = no marginal constrainte
+                      epsilon_init=0,  # Entropy will get smaller and smaller if set > 0
                       T_is_sparse=False,
-                      KL=0,
-                      nb_iter_global=(0, 1),
+                      KL=1,
+                      nb_iter_global=(0, 1), # Used to defined the decay of entropy
                       verbose=False,
-                      epsilon_min=0.01,
-                      repeat=True,
-                      labels_s=None,
-                      labels_t=None,
-                      eta=1,
+                      epsilon_min=1,  # Minimum value of entropy
+                      repeat=True,  # The sampling can be with or without remise
+                      labels_s=None,  # Labels used for OTDA
+                      labels_t=None,  # Labels used for OTDA
+                      eta=1,  # Parameter of OTDA
                       W_distance_needed=False,
-                      greenkhorn=False,
-                      sliced=True,
-                      learning_step=0.8):
+                      greenkhorn=False,  # Variant of GreenKhorn, doesn't work well as the marginal are not respected
+                      sliced=True,  # PoGroW algorithm if only one sample is used without any KL.
+                      learning_step=0.8  # Step of the FW algorithm, used by PoGroW
+                      ):
 
     assert T.shape[0] >= T.shape[1]  # Just swap as preprocess and transpose the plan T after.
     if greenkhorn:
@@ -623,11 +571,9 @@ def Generalisation_OT(C1, C2, loss_fun, T,  # C1 and C2 can be function
                 batch_size[1][d] = T.shape[1]
     time_print = False
     T_sliced = None
-    # for d in range(dimension_OT):
-    #     batch_size[0][d] = min(batch_size[0][d], T.shape[0])
-    #     batch_size[1][d] = min(batch_size[1][d], T.shape[1])
+
     batch_size = np.array(batch_size, dtype=int)
-    # print(batch_size)
+
     if time_print:
         print("Before the loop", time.time() - time_init)
     for e in range(iter_epsilon):
@@ -635,45 +581,10 @@ def Generalisation_OT(C1, C2, loss_fun, T,  # C1 and C2 can be function
         epsilon = epsilon_init * ((1 - ((nb_iter_global[0] * iter_epsilon) + e)
                                    / (nb_iter_global[1] * iter_epsilon)) ** 3) + epsilon_min
         for iter_batch in range(nb_iter_batch):
-            if not verbose:
-                print(".", end="")
             if time_print:
                 print("Iter(", e, iter_batch, "):")
                 print(time.time() - time_init)
 
-            # if T_is_sparse:
-            #     assert False # not needed anymore
-            # i_pos = rng.choice(C1.shape[0], size=batch_size[0], replace=False)
-            # j_pos = rng.choice(C1.shape[1], size=batch_size[1], replace=False)
-            #
-            # a = C2[:, np.newaxis, :]
-            # b = C1[:, j_pos, np.newaxis]
-            # L_jl = np.sum(loss_fun(b[i_pos], a[T[i_pos]]), axis=0) / batch_size[0]
-            # loss = np.sum(L_jl[np.arange(batch_size[1]), T[j_pos]]) / batch_size[0]
-            #
-            # if verbose:
-            #     print(iter_batch, ":", loss, "(batched)")
-            #
-            # if not constraint:
-            #     if epsilon == 0:
-            #         T[j_pos] = np.argmin(L_jl, axis=1)
-            #     else:
-            #         new_T = np.exp(-L_jl / epsilon)
-            #         new_T /= np.sum(new_T, axis=1, keepdims=True)
-            #         T[j_pos] = sparsification_of_T(new_T)
-            # else:
-            #     if epsilon == 0:
-            #         new_T = emd(a=np.ones(L_jl.shape[0]) / L_jl.shape[0],
-            #                      b=np.ones(L_jl.shape[1]) / L_jl.shape[1],
-            #                      M=L_jl)
-            #     else:
-            #         new_T = sinkhorn(a=np.ones(L_jl.shape[0]) / L_jl.shape[0],
-            #                           b=np.ones(L_jl.shape[1]) / L_jl.shape[1],
-            #                           M=L_jl,
-            #                           reg=epsilon)
-            #
-            #     T[j_pos] = sparsification_of_T(new_T)
-            # time_test = time.time()
             index = [[0] * (dimension_OT - 1), [0] * (dimension_OT - 1)]
             for d in range(dimension_OT - 1):
                 index[0][d] = np.random.choice(T.shape[0],
@@ -681,17 +592,13 @@ def Generalisation_OT(C1, C2, loss_fun, T,  # C1 and C2 can be function
                                                replace=repeat)
                 index_temp = np.zeros(len(index[0][d]) * batch_size[1, d], dtype=int)
                 for i, index_0_d_i in enumerate(index[0][d]):
-                    # print("end")
-                    # print(T.sum(0) * T.shape[0], T.sum(1) * T.shape[0])
-                    # print((T[index_0_d_i, :] * T.shape[0]).sum())
-                    # print(T[index_0_d_i, :] * T.shape[0])
                     index_temp[i * batch_size[1, d]:(i + 1) * batch_size[1, d]] = \
                         np.random.choice(T.shape[1],
                                          size=batch_size[1, d],
                                          p=T[index_0_d_i, :] * T.shape[0])
                 index[1][d] = index_temp
                 index[0][d] = np.repeat(index[0][d], batch_size[1, d])
-            # print(time_test - time.time())
+
             if np.prod(batch_size[:, :-1]) == 1 and epsilon == 0 and \
                     constraint and sliced:
                 if e == 0 and iter_batch == 0:
@@ -710,76 +617,10 @@ def Generalisation_OT(C1, C2, loss_fun, T,  # C1 and C2 can be function
                     new_T[:, C2_sort] = new_T.copy()
                 Lii_ = None
                 T = update_T_without_KL(old_T=T, new_T=new_T, learning_step=learning_step)
-                # print("")
-                # print(compute_distance_sampling_both(C1=C1,
-                #                                         C2=C2,
-                #                                         loss_fun=loss_fun,
-                #                                         T=T))
                 continue
-
-                # if np.prod(batch_size[:, :-1]) == 1 and epsilon == 0 \
-                #         and (KL is None or KL is False) and constraint:
-                #     print("Very special case, to be treated later, kind of sliced")
-                #     # Notice that we don't take into account the loss function
-                #     # This might be false if this function doesn't map the lowest value to the lowest.
-                #     C1_sort = C1(np.array(index[0][-1])).argsort()
-                #     C2_sort = C2(np.array(index[1][-1])).argsort()
-                #
-                #     n, m = T.shape[0], T.shape[1]
-                #     weights = np.zeros((2, m))
-                #
-                #     ratio = n / m
-                #
-                #     # fix array that depend on the value of n and m. We are only interested at the order and at the
-                #     # number of point that should be send from one distribution to the other.
-                #     # n = 2, m = 5 give [0, 0, 0, 1, 1] for the perm_global and [., ., 1, ., . ] for 2
-                #     # All the masse of the the first 2 points are send to the points 0.
-                #     # and only a fraction (computed in weights) of the 3rd points are send to 0 because perm_global_2
-                #     # has a value.
-                #     # In fact perm_global_2 have some value at every position.
-                #     # But it is associated with 0 in weights[1].
-                #
-                #     # I recomande to take example (n = 7, m=16 for instance) to understand this part.
-                #     arange_1 = np.int_(np.arange(1, n + 1, ratio)) / n
-                #     arange_2 = np.arange(1, m + 1) / m
-                #     perm_global = np.int_(np.arange(0, n, ratio))
-                #     perm_global_2 = np.minimum(perm_global + 1, n - 1)
-                #
-                #     a1_a2 = arange_1 - arange_2
-                #     # weights[0, i] associated to the transport of
-                #     # the points i in X1 to the points X2 define in perm_global
-                #     # weights[1, i] associated to the transport of
-                #     #  the points i in X1 to the points X2 define in perm_global_2
-                #     weights[0] = (1 / m) * (0 <= a1_a2) + (1 / m + a1_a2) * (0 > a1_a2)
-                #     weights[1] = np.abs(a1_a2) * (0 > a1_a2)
-                #
-                #     new_T = np.zeros_like(T)
-                #     new_T[C1_sort, C2_sort[perm_global]] = weights[0]
-                #     new_T[C1_sort, C2_sort[perm_global_2]] += weights[1]
-                #
-                #     T = (T + learning_step * new_T) / (1 + learning_step)
-                #     continue
             else:
                 if time_print:
                     print("Before Lii_ ", time.time() - time_init)
-                    # a,b = C1(np.array(index[0])), C2(np.array(index[1]))
-                    # print("After Lii_1  ", time.time() - time_init)
-                    # print(a.shape, b.shape)
-                    # c = loss_fun(a, b)
-                    # print("After Lii_2  ", time.time() - time_init)
-                    # np.mean(c,
-                    #         axis=tuple(range(dimension_OT - 1)))
-                    # print("After Lii_3  ", time.time() - time_init)
-
-                # print(tuple(range(dimension_OT - 1)))
-                # print(C1(np.array(index[0])).shape, C2(np.array(index[1])).shape)
-                # print(loss_fun(C1(np.array(index[0])), C2(np.array(index[1]))).shape)
-                # print(C1(np.array(index[0]).shape))
-                # print(C2(np.array(index[1]).shape))
-                # print("", C1(np.array(index[0])))
-                # print(C2(np.array(index[1])))
-                # print(index[0], index[1])
-                # print(index)
 
                 if len(index[0][0]) == 1:
                     Lii_ = np.mean(loss_fun(C1(np.array(index[0])), C2(np.array(index[1]))),
@@ -790,8 +631,7 @@ def Generalisation_OT(C1, C2, loss_fun, T,  # C1 and C2 can be function
                         Lii_ += np.mean(loss_fun(C1(np.array(index[0][0][i])[np.newaxis, np.newaxis]),
                                                  C2(np.array(index[1][0][i])[np.newaxis, np.newaxis])),
                                        axis=tuple(range(dimension_OT - 1)))
-                # print((np.array(index[0])), (np.array(index[1])))
-                # print(C1(np.array(index[0])), C2(np.array(index[1])))
+
 
                 if time_print:
                     print("After Lii_  ", time.time() - time_init)
@@ -848,10 +688,6 @@ def Generalisation_OT(C1, C2, loss_fun, T,  # C1 and C2 can be function
                                                          labels_a=labels_s,
                                                          eta=eta)
                         except (RuntimeWarning, UserWarning):
-                            # print("Warning catched, epsilon is set to 0, T is not updated")
-                            # epsilon_init = 0
-                            # epsilon = 0
-                            # continue
                             continue_loop = False
                             print("Warning catched: Return last stable T")
                             break
@@ -885,7 +721,7 @@ def Generalisation_OT(C1, C2, loss_fun, T,  # C1 and C2 can be function
                 continue_loop += 1
                 if continue_loop > 100:  # Number max of low modification of T 10
                     continue_loop = False
-                    print("Stop")
+                    print("Too many small modification of T")
                     T = new_T.copy()
                     break
             else:
@@ -920,7 +756,7 @@ def entropic_gromov_wasserstein(C1, C2, p, q, loss_fun, epsilon,
     time_init = time.time()
 
     while (err > tol and cpt < max_iter):
-        print(".", end="")
+        # print(".", end="")
 
         Tprev = T
 
@@ -962,7 +798,7 @@ def entropic_gromov_wasserstein(C1, C2, p, q, loss_fun, epsilon,
                     print('{:5s}|{:12s}'.format(
                         'It.', 'Err') + '\n' + '-' * 19)
                 print('{:5d}|{:8e}|'.format(cpt, err))
-        print(cpt, time.time() - time_init)
+        # print(cpt, time.time() - time_init)
         cpt += 1
 
     if log:
@@ -975,51 +811,6 @@ def entropic_gromov_wasserstein(C1, C2, p, q, loss_fun, epsilon,
         return T
 
 
-# def GW_update_T2(C1, C2, loss_fun, T, nb_iter_gromov=1, verbose=False, constraint=False):
-#     # print(T, C1, C2)
-#     best_loss = 9999999
-#     best_T = T
-#     for i in range(nb_iter_gromov):
-#
-#         L_jl = np.sum(loss_fun(C1[:, :, np.newaxis], C2[T, np.newaxis, :]), axis=0) / len(T)
-#         print(L_jl.sum())
-#         loss = np.sum(L_jl[np.arange(len(T)), T]) / (len(T))
-#         if best_loss > loss:
-#             best_T = T
-#             best_loss = loss
-#         if verbose:
-#             # print(L_jl[np.arange(len(T)), T])
-#             print(best_T)
-#             print("Iteration", i, ":", loss, ". Best loss :", best_loss)
-#
-#         # if i == 0:
-#         #     print("initial T", np.sum(L_jl[np.arange(len(T)), T]))
-#         #     L_jl_2 = np.sum(loss_fun(C1[:, :, np.newaxis], C2[np.arange(len(T)), np.newaxis, :]), axis=0)
-#         #     print("T = identity", np.sum(L_jl_2[np.arange(len(T)), np.arange(len(T))]))
-#         if not constraint:
-#             T = np.argmin(L_jl, axis=1)
-#         else:
-#             real_gromov = emd(a=np.ones(L_jl.shape[0]) / L_jl.shape[0],
-#                               b=np.ones(L_jl.shape[1]) / L_jl.shape[1],
-#                               M=L_jl)
-#             T = np.argmax(real_gromov, axis=1)
-#         # print("TTTT ???", T)
-#         # L_jl_bis = loss_fun(C1[:, :, np.newaxis, np.newaxis], C2[np.newaxis, np.newaxis, :, :])
-#         # L_jl_bis = np.sum(L_jl_bis[np.arange(len(T)), :, T, :], axis=0)
-#         # print("T", T)
-#         # print(np.sum(L_jl_bis[np.arange(len(T)), T]))
-#         # print("L_jl[T, :]", L_jl[np.arange(len(T)), T])
-#         # print("L_jl", L_jl)
-#
-#     if verbose:
-#         # L_jl = np.sum(loss_fun(C1[:, :, np.newaxis], C2[best_T, np.newaxis, :]), axis=0) / len(best_T)
-#         # loss = np.sum(L_jl[np.arange(len(best_T)), best_T]) / len(best_T)
-#         print("Last loss", best_loss)
-#         print("Last T", best_T)
-#         print("")
-#     return best_T
-#
-#
 def GW_update_T_full(C1, C2, loss_fun, T, epsilon=0, nb_iter_gromov=10, verbose=False,
                      constraint=False, KL=False):
 

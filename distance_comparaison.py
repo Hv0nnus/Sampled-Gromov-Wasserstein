@@ -16,7 +16,6 @@ def main(entropy=True,
          points=[20, 50, 100, 500]):
 
     if entropy:
-
         nb_iter = 1
         np.random.seed(12345)
         n_samples_s = 50
@@ -57,14 +56,6 @@ def main(entropy=True,
         for epsilon in epsilons:
             print("\nepsilon :", epsilon)
 
-            # T = gromov.Generalisation_OT(C1=Cs_,
-            #                              C2=Ct_,
-            #                              loss_fun=loss_fun,
-            #                              T=np.outer(ot.unif(n_samples_s), ot.unif(n_samples_t)),
-            #                              epsilon_min=epsilon,  # swap between the epsilon !
-            #                              nb_iter_batch=1000,
-            #                              epsilon_init=0,
-            #                              KL=1)
             T = gromov.entropic_gromov_wasserstein(C1=Cs,
                                                    C2=Ct,
                                                    p=ot.unif(n_samples_s),
@@ -172,15 +163,6 @@ def main(entropy=True,
                                          epsilon_init=0,
                                          KL=1)
 
-            # T = gromov.entropic_gromov_wasserstein(C1=Cs,
-            #                                        C2=Ct,
-            #                                        p=ot.unif(n_samples_s),
-            #                                        q=ot.unif(n_samples_t),
-            #                                        loss_fun="square_loss",
-            #                                        epsilon=epsilon)
-            # if epsilon == 0:
-            #     for i in range(len(T)):
-            #         print(T[i,:])
             std = None
             t = []
             if point <= 500:
@@ -226,7 +208,7 @@ def main(entropy=True,
             pickle.dump(distance, handle)
 
 
-def plot(log_scale=True, entropy=True, epsilon_range=None, figsize1=10, figsize2=10):
+def plot(log_scale=True, entropy=True, epsilon_range=None, figsize1=10, figsize2=10, marker=["o", "x", "^"]):
     if entropy:
         with open("pickle_distance/entropy_distance.pickle", 'rb') as handle:
             distance = pickle.load(handle)
@@ -237,8 +219,8 @@ def plot(log_scale=True, entropy=True, epsilon_range=None, figsize1=10, figsize2
             distance = pickle.load(handle)
         if epsilon_range is None:
             epsilon_range = [10, 20, 50, 100, 500]
-    name_algo2 = ["Sampled", "Real", "Sparse"]
-    for n_i, name_algo in enumerate(["sample", "real", "sparse"]):
+    name_algo2 = ["Real", "Sampled", "Sparse"]
+    for n_i, name_algo in enumerate(["real", "sample", "sparse"]):
         time_list = []
         distance_list = []
         std_list = []
@@ -257,20 +239,23 @@ def plot(log_scale=True, entropy=True, epsilon_range=None, figsize1=10, figsize2
         std_total_list = np.array(std_total_list)
         plt.figure(1, figsize=(figsize1, figsize2))
 
-        plt.plot(range(time_list.shape[0]), np.mean(time_list, axis=1), label=name_algo2[n_i])
+        plt.plot(range(time_list.shape[0]), np.mean(time_list, axis=1), marker[n_i], label=name_algo2[n_i],
+                                     linestyle="-", markersize=8)
+        # plt.plot(range(time_list.shape[0]), np.mean(time_list, axis=1), marker[n_i], label=name_algo2[n_i])
         plt.fill_between(range(time_list.shape[0]),
                          np.mean(time_list, axis=1) - np.std(time_list, axis=1),
                          np.mean(time_list, axis=1) + np.std(time_list, axis=1),
                          alpha=0.3)
-        name_algo2[0] = "Sampled mean"
+        # name_algo2[1] = "Sampled mean"
         plt.figure(2, figsize=(figsize1, figsize2))
 
-        plt.plot(range(time_list.shape[0]), distance_list, label=name_algo2[n_i])
-        if std_list[0] is not None and n_i == 0:
+        plt.plot(range(time_list.shape[0]), distance_list, marker[n_i], label=name_algo2[n_i], linestyle="-",
+                 markersize=8)
+        if std_list[0] is not None and n_i == 1:
             plt.fill_between(range(time_list.shape[0]),
                              distance_list - 2 * std_list,
                              distance_list + 2 * std_list,
-                             alpha=0.3, label="2 Standard deviation")
+                             alpha=0.3, color="orange")#, label="2 Standard deviation")
         # alpha = 0.3, label = "Std with stratification")
         if name_algo == "sample" and False:
             plt.fill_between(range(time_list.shape[0]),
@@ -280,7 +265,7 @@ def plot(log_scale=True, entropy=True, epsilon_range=None, figsize1=10, figsize2
 
     plt.figure(1)
     handles, labels = plt.gca().get_legend_handles_labels()
-    order = [1, 0, 2]
+    order = [0, 1, 2]
     plt.legend([handles[idx] for idx in order], [labels[idx] for idx in order], prop={'size': 12})
     # plt.title("Time needed to compute T and Wasserstein")
     if entropy:
@@ -294,13 +279,15 @@ def plot(log_scale=True, entropy=True, epsilon_range=None, figsize1=10, figsize2
         plt.yscale("log")
     if entropy:
         plt.savefig("./figure/epsilon_time.pdf", bbox_inches="tight")
+        # plt.savefig("./figure/epsilon_time.png", bbox_inches="tight")
     else:
         plt.savefig("./figure/point_time.pdf", bbox_inches="tight")
+        # plt.savefig("./figure/point_time.png", bbox_inches="tight")
 
 
     plt.figure(2)
     handles, labels = plt.gca().get_legend_handles_labels()
-    order = [1, 0, 3, 2]
+    order = [0, 1, 2]
     # plt.title("Wasserstein Distance")
     if entropy:
         plt.xlabel("Entropy: $\epsilon$", fontsize=14)
@@ -314,8 +301,10 @@ def plot(log_scale=True, entropy=True, epsilon_range=None, figsize1=10, figsize2
     plt.yticks(fontsize=10)
     if entropy:
         plt.savefig("./figure/epsilon_distance.pdf", bbox_inches="tight")
+        # plt.savefig("./figure/epsilon_distance.eps", bbox_inches="tight")
     else:
         plt.savefig("./figure/point_distance.pdf", bbox_inches="tight")
+        # plt.savefig("./figure/point_distance.eps", bbox_inches="tight")
     plt.plot()
 
 

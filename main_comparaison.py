@@ -5,21 +5,16 @@ import matplotlib.pyplot as plt
 import matplotlib
 import sklearn
 
-# import pandas as pd
-# import tikzplotlib
-
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 import argparse
 import time
 import pickle
 from os import path
-import sys
 import networkx as nx
 from sklearn.model_selection import train_test_split, KFold
 import sklearn.svm
 import pandas as pd
-# from networkx.generators.community import stochastic_block_model
 
 from GROMOV_personal import Generalisation_OT
 from GROMOV_personal import entropic_gromov_wasserstein
@@ -28,8 +23,6 @@ from GROMOV_personal import compute_L
 from GROMOV_personal import compute_distance_sparse
 import GROMOV_personal as Gromov
 
-sys.path.insert(1, os.path.join(sys.path[0], '../fusedpogrow'))
-import gromov as Gromov_fused
 
 import S_GWL_Toolkit as GwGt
 import ot
@@ -48,14 +41,6 @@ def get_C(Xs, Xt, function=False, dimension=1, enough_space=True, square_root=Tr
             def C2_(array_ij, array_kl=None):
                 a = C2[array_ij[0], array_kl]
                 return a.reshape(len(array_ij[0]), 1, -1)
-
-            # def C1_(array_ij):
-            #     a = C1[array_ij[0], :]
-            #     return a[:, :, np.newaxis]
-            #
-            # def C2_(array_ij):
-            #     a = C2[array_ij[0], :]
-            #     return a[:, np.newaxis, :]
 
             return C1_, C2_
 
@@ -190,27 +175,19 @@ def create_dataset(args, name_dataset="gaussian", n_samples_s=20, n_samples_t=20
         args.ps_out_t = 1 / args.ps_out_t
         args.p_in_t = 1 / args.p_in_t
 
-        # default argument 0.5 and 0.1 will lead to gaussian with variance of ps_out = 10 and ps_in = 2
-
-        # args.ps_out_s << args.p_in_s mean all samples come from the same gaussian
-        # args.ps_out_s >> args.p_in_s mean the gaussians are very seperated
-
         def create_X(dimension, clique_size, ps_out, p_in, variance, n_samples):
             X = None
             number_points_total = 0
             while True:
-                # print("mean variance")
-                # print(np.zeros(dimension),np.eye(dimension) * ps_out)
+
                 center_gaussian = np.random.multivariate_normal(np.zeros(dimension),
                                                                 np.eye(dimension) * ps_out)
                 number_points = int(np.random.normal(clique_size, variance))
                 number_points = np.clip(number_points, 0, n_samples - number_points_total)
-                # print(number_points)
-                # print("center_gaussian", center_gaussian)
+
                 new_points = np.random.multivariate_normal(center_gaussian,
                                                            np.eye(dimension) * p_in,
                                                            number_points)
-                # print(new_points[0])
                 if X is None:
                     X = new_points
                 else:
@@ -226,16 +203,13 @@ def create_dataset(args, name_dataset="gaussian", n_samples_s=20, n_samples_t=20
                       p_in=args.p_in_s,
                       variance=args.variance_s,
                       n_samples=n_samples_s)
-        # print(Xs[0])
         Xt = create_X(dimension=dimension_t,
                       clique_size=args.clique_size_t,
                       ps_out=args.ps_out_t,
                       p_in=args.p_in_t,
                       variance=args.variance_t,
                       n_samples=n_samples_t)
-        # print(Xs[0:2, 0:2])
-        # print("XS.shape", Xs.shape)
-        # print("XT.shape", Xt.shape)
+
         if "sampled_gromov" in args.name_algo:
             Cs, Ct = get_C(Xs, Xt, function=True,
                            dimension=args.dimension,
@@ -361,7 +335,6 @@ def create_dataset(args, name_dataset="gaussian", n_samples_s=20, n_samples_t=20
         if os.path.exists("./DATA/FIRSTMM_DB/C_label.pickle"):
             with open("./DATA/FIRSTMM_DB/C_label.pickle", "rb") as f:
                 C_label = pickle.load(f)
-            # print(C_label["C"])
 
             return C_label["C"], C_label["label"]
         else:
@@ -472,78 +445,8 @@ def find_best_T(C1, C2, loss_func, n_samples_s, n_samples_t, nb_perm=100):
 def solve_G_OT(name_algo, C1, C2, Xs, Xt, loss_func, args):
     T, W_distance, time_list_only_T = None, None, None
     time_before_run = time.time()
-    if name_algo == "sampled_gromov":
-        T = Generalisation_OT(C1=C1,
-                              C2=C2,
-                              loss_fun=loss_func,
-                              T=np.outer(ot.unif(args.n_samples_s), ot.unif(args.n_samples_t)),
-                              dimension_OT=args.dimension,
-                              nb_iter_global=(0, 1),
-                              epsilon_min=args.epsilon_min,
-                              repeat=args.repeat,
-                              iter_epsilon=args.iter_epsilon,
-                              nb_iter_batch=args.nb_iter_batch,
-                              batch_size=args.batch_size,
-                              constraint=args.constraint,
-                              epsilon_init=args.epsilon,
-                              KL=args.KL,
-                              verbose=args.verbose,
-                              learning_step=args.learning_step)
-        time_list_only_T = time.time() - time_before_run
-        W_distance = Gromov.compute_distance_sampling_both(C1=C1,
-                                                           C2=C2,
-                                                           loss_fun=loss_func,
-                                                           T=T)
 
-    elif name_algo == "sampled_gromov_no_KL":
-        T = Generalisation_OT(C1=C1,
-                              C2=C2,
-                              loss_fun=loss_func,
-                              T=np.outer(ot.unif(args.n_samples_s), ot.unif(args.n_samples_t)),
-                              dimension_OT=args.dimension,
-                              nb_iter_global=(0, 1),
-                              epsilon_min=args.epsilon_min,
-                              repeat=args.repeat,
-                              iter_epsilon=args.iter_epsilon,
-                              nb_iter_batch=args.nb_iter_batch,
-                              batch_size=args.batch_size,
-                              constraint=args.constraint,
-                              epsilon_init=args.epsilon,
-                              KL=0,
-                              verbose=args.verbose,
-                              learning_step=args.learning_step)
-        time_list_only_T = time.time() - time_before_run
-
-        W_distance = Gromov.compute_distance_sampling_both(C1=C1,
-                                                           C2=C2,
-                                                           loss_fun=loss_func,
-                                                           T=T)
-
-    elif name_algo == "sampled_gromov_no_KL_e":
-        T = Generalisation_OT(C1=C1,
-                              C2=C2,
-                              loss_fun=loss_func,
-                              T=np.outer(ot.unif(args.n_samples_s), ot.unif(args.n_samples_t)),
-                              dimension_OT=args.dimension,
-                              nb_iter_global=(0, 1),
-                              epsilon_min=0,
-                              repeat=args.repeat,
-                              iter_epsilon=args.iter_epsilon,
-                              nb_iter_batch=args.nb_iter_batch,
-                              batch_size=args.batch_size,
-                              constraint=args.constraint,
-                              epsilon_init=0,
-                              KL=0,
-                              verbose=args.verbose,
-                              sliced=False,
-                              learning_step=args.learning_step)
-        time_list_only_T = time.time() - time_before_run
-        W_distance = Gromov.compute_distance_sampling_both(C1=C1,
-                                                           C2=C2,
-                                                           loss_fun=loss_func,
-                                                           T=T)
-
-    elif name_algo == "sampled_gromov_sliced":
+    if name_algo == "sampled_gromov_sliced":
         T = Generalisation_OT(C1=C1,
                               C2=C2,
                               loss_fun=loss_func,
@@ -561,22 +464,6 @@ def solve_G_OT(name_algo, C1, C2, Xs, Xt, loss_func, args):
                               verbose=args.verbose,
                               sliced=True,
                               learning_step=args.learning_step)
-        time_list_only_T = time.time() - time_before_run
-        W_distance = Gromov.compute_distance_sampling_both(C1=C1,
-                                                           C2=C2,
-                                                           loss_fun=loss_func,
-                                                           T=T)
-    elif name_algo == "sample_gromov_sliced_fused":
-
-        T = Gromov_fused.Sliced_PoGroW_POT(C1=C1, C2=C2,
-                                           loss_fun=loss_func,
-                                           p=ot.unif(args.n_samples_s), q=ot.unif(args.n_samples_t),
-                                           T=None,
-                                           nb_iter=args.iter_epsilon,
-                                           nb_samples=args.batch_size[0][0],
-                                           verbose=args.verbose,
-                                           learning_step=args.learning_step,
-                                           to_array=True)
         time_list_only_T = time.time() - time_before_run
         W_distance = Gromov.compute_distance_sampling_both(C1=C1,
                                                            C2=C2,
@@ -651,6 +538,78 @@ def solve_G_OT(name_algo, C1, C2, Xs, Xt, loss_func, args):
                                                            C2=C2,
                                                            loss_fun=loss_func,
                                                            T=T)
+#--------------- The three next algorithm has not been used -----------------
+        # elif name_algo == "sampled_gromov":
+        #     T = Generalisation_OT(C1=C1,
+        #                           C2=C2,
+        #                           loss_fun=loss_func,
+        #                           T=np.outer(ot.unif(args.n_samples_s), ot.unif(args.n_samples_t)),
+        #                           dimension_OT=args.dimension,
+        #                           nb_iter_global=(0, 1),
+        #                           epsilon_min=args.epsilon_min,
+        #                           repeat=args.repeat,
+        #                           iter_epsilon=args.iter_epsilon,
+        #                           nb_iter_batch=args.nb_iter_batch,
+        #                           batch_size=args.batch_size,
+        #                           constraint=args.constraint,
+        #                           epsilon_init=args.epsilon,
+        #                           KL=args.KL,
+        #                           verbose=args.verbose,
+        #                           learning_step=args.learning_step)
+        #     time_list_only_T = time.time() - time_before_run
+        #     W_distance = Gromov.compute_distance_sampling_both(C1=C1,
+        #                                                        C2=C2,
+        #                                                        loss_fun=loss_func,
+        #                                                        T=T)
+        #
+        # elif name_algo == "sampled_gromov_no_KL":
+        #     T = Generalisation_OT(C1=C1,
+        #                           C2=C2,
+        #                           loss_fun=loss_func,
+        #                           T=np.outer(ot.unif(args.n_samples_s), ot.unif(args.n_samples_t)),
+        #                           dimension_OT=args.dimension,
+        #                           nb_iter_global=(0, 1),
+        #                           epsilon_min=args.epsilon_min,
+        #                           repeat=args.repeat,
+        #                           iter_epsilon=args.iter_epsilon,
+        #                           nb_iter_batch=args.nb_iter_batch,
+        #                           batch_size=args.batch_size,
+        #                           constraint=args.constraint,
+        #                           epsilon_init=args.epsilon,
+        #                           KL=0,
+        #                           verbose=args.verbose,
+        #                           learning_step=args.learning_step)
+        #     time_list_only_T = time.time() - time_before_run
+        #
+        #     W_distance = Gromov.compute_distance_sampling_both(C1=C1,
+        #                                                        C2=C2,
+        #                                                        loss_fun=loss_func,
+        #                                                        T=T)
+
+        # elif name_algo == "sampled_gromov_no_KL_e":
+        #     T = Generalisation_OT(C1=C1,
+        #                           C2=C2,
+        #                           loss_fun=loss_func,
+        #                           T=np.outer(ot.unif(args.n_samples_s), ot.unif(args.n_samples_t)),
+        #                           dimension_OT=args.dimension,
+        #                           nb_iter_global=(0, 1),
+        #                           epsilon_min=0,
+        #                           repeat=args.repeat,
+        #                           iter_epsilon=args.iter_epsilon,
+        #                           nb_iter_batch=args.nb_iter_batch,
+        #                           batch_size=args.batch_size,
+        #                           constraint=args.constraint,
+        #                           epsilon_init=0,
+        #                           KL=0,
+        #                           verbose=args.verbose,
+        #                           sliced=False,
+        #                           learning_step=args.learning_step)
+        #     time_list_only_T = time.time() - time_before_run
+        #     W_distance = Gromov.compute_distance_sampling_both(C1=C1,
+        #                                                        C2=C2,
+        #                                                        loss_fun=loss_func,
+        #                                                        T=T)
+
 
     #  ------------------Other methods-----------------------
 
@@ -993,7 +952,7 @@ def hyperparameter_analysis(n_samples_s=500,
                 plt.plot([], [],
                          marker="",
                          color=(0, 0, 0),
-                         label="$SaGroW^{KL}$" if name_algo == "sampled_gromov_e_constant" else "$SaGroW$" ,
+                         label="$SaGroW^{KL}$" if name_algo == "sampled_gromov_e_constant" else "$SaGroW$",
                          markersize=2,
                          linestyle="None")
                 plt.plot([], [],
@@ -1095,8 +1054,9 @@ def hyperparameter_analysis(n_samples_s=500,
                             marker = (b_index + 2, 0, 0)
                             color = (1, (1 - (m_index / (len(iteration) - 1))) ** 0.45 / 1.3, 0)
 
-                            # color = (1, ((1 - m_index / (len(iteration) - 1))) / 1.5, 0)
+                            # color = 1, ((1 - m_index / (len(iteration) - 1))) / 1.5, 0)
                             if name_algo == "sampled_gromov_e_constant" or name_algo == "sampled_gromov_no_KL_e_constant":
+                                # if plot:
                                 if m_index == 0:
                                     plt.plot([None], [None],
                                              marker=marker,
@@ -1287,11 +1247,686 @@ def hyperparameter_analysis(n_samples_s=500,
         plt.legend()
     if save:
         if "sampled_gromov_no_KL_e_constant" in names_algo:
-            plt.savefig("./figure/Analysis_hyper/noKL_" + str(min_plot) + "_" + loss_func_name + "_" + str(n_samples_s) + "_" +
-                        name_dataset + ".pdf", bbox_inches="tight")
+            plt.savefig(
+                "./figure/Analysis_hyper/noKL_" + str(min_plot) + "_" + loss_func_name + "_" + str(n_samples_s) + "_" +
+                name_dataset + ".pdf", bbox_inches="tight")
         else:
-            plt.savefig("./figure/Analysis_hyper/" + str(min_plot) + "_" + loss_func_name + "_" + str(n_samples_s) + "_" +
-                        name_dataset + ".pdf", bbox_inches="tight")
+            plt.savefig(
+                "./figure/Analysis_hyper/" + str(min_plot) + "_" + loss_func_name + "_" + str(n_samples_s) + "_" +
+                name_dataset + ".pdf", bbox_inches="tight")
+    plt.show()
+
+
+def hyperparameter_analysis_3(n_samples_s=500,
+                              name_dataset="gaussian",
+                              pickle_path="pickle_compare",
+                              names_algo=["sampled_gromov"],
+                              names_algo_legend=["sampled_gromov"],
+                              pickle_name="",
+                              noise_graph=0.1,
+                              loss_func_name="1_loss",
+                              figsize=(10, 5),
+                              save=False,
+                              entropy=[0.1],
+                              batchsize=[1],
+                              iteration=[1000],
+                              log_scale=False,
+                              min_plot=False,
+                              only_PGW=True,
+                              final_plot=True,
+                              which_plot=0):
+    grey_color = (0.9, 0.9, 0.9)
+    fig = plt.figure(0, figsize=figsize)
+    already_plot_SGW_legend = False
+    if name_dataset in ["gaussian_graph", "same_graph", "gaussian_point_graph"]:
+        # Can't compare sliced with other.
+        try:
+            names_algo.remove("sliced_gromov")
+            names_algo_legend.remove("Sliced GW")
+        except:
+            pass
+    params = {}
+    same_param = None
+    markersize = 10
+    for name_algo, name_algo_legend in zip(names_algo, names_algo_legend):
+        if name_algo in ["e_gromov", "e_gromov_KL"]:  # "e_gromov_KL"
+            m_save_time = []
+            m_save_distance = []
+            for e_index, e in enumerate(entropy):
+                acces_dict = name_algo + str(n_samples_s) + "_" + str(n_samples_s) + str(e)
+
+                if name_dataset == "same_graph":
+                    path_pickle = "./" + pickle_path + "/" + name_dataset + "/" + name_algo + "/" + str(
+                        n_samples_s) + "_" + str(n_samples_s) + "_" + loss_func_name + "__" + str(noise_graph) + "_" + \
+                                  str(e) + "__" + pickle_name + ".pickle"
+                else:
+                    path_pickle = "./" + pickle_path + "/" + name_dataset + "/" + name_algo + "/" + str(
+                        n_samples_s) + "_" + str(n_samples_s) + "_" + loss_func_name + "_" + str(
+                        e) + "_" + pickle_name + ".pickle"
+                if path.exists(path_pickle):
+                    with open(path_pickle, "rb") as pickle_in:
+                        params[acces_dict] = pickle.load(pickle_in)
+                        if same_param is None:
+                            same_param = params[acces_dict]
+                        elif params[acces_dict]["name_algo"] != "uniform":
+                            # Use this to check if every run use the same parameter
+                            for test in ["n_iter_algo", "rdm_seed", "same_space"]:
+                                if same_param[test] != params[acces_dict][test]:
+                                    print(params[acces_dict])
+                                    pass
+                                    print("Warning", test, same_param[test], params[acces_dict][test])
+                    time_list_only_W_approx = params[acces_dict]["time_list_only_W_approx"]
+                    time_list_only_T = params[acces_dict]["time_list_only_T"]
+                    time_list_only_W = params[acces_dict]["time_list_only_W"]
+                    time_list = time_list_only_T + time_list_only_W
+                    W_distance_list_approx = params[acces_dict]["W_distance_list_approx"]
+                    W_distance_list = params[acces_dict]["W_distance_list"]
+                    color = (0, 1 - e_index / (len(entropy) - 1), e_index / (len(entropy) - 1))
+                    # print(name_algo, color, entropy[e_index])
+                    label = None
+                    if name_algo == "e_gromov":
+                        marker = 'o'
+                    else:
+                        marker = 'P'
+                    if e_index == 0:
+                        if name_algo == "e_gromov":
+                            label = "$EGW$"
+                            if which_plot == 2:
+                                plt.plot([], [],
+                                         marker=marker,
+                                         color=(0, 0, 0),
+                                         label=label,
+                                         markersize=markersize,
+                                         linestyle="None")
+                        else:
+                            label = "$EGW^{KL}$"
+                            if which_plot == 2:
+                                plt.plot([], [],
+                                         marker=marker,
+                                         color=(0, 0, 0),
+                                         label=label,
+                                         markersize=markersize,
+                                         linestyle="None")
+                    markersize = 10
+                    label = None
+                    if min_plot:
+                        W_distance_list_ = np.min(W_distance_list)
+                        time_list_only_T_ = time_list_only_T[np.argmin(W_distance_list)]
+                    else:
+                        W_distance_list_ = np.mean(W_distance_list)
+                        # print("std", np.std(W_distance_list))
+                        time_list_only_T_ = np.mean(time_list_only_T)
+                    m_save_time.append(time_list_only_T_)
+                    m_save_distance.append(W_distance_list_)
+                    if which_plot != 2:
+                        color = grey_color
+                    plt.plot(time_list_only_T_, W_distance_list_,
+                             marker=marker,
+                             color=color,
+                             label=label,
+                             markersize=markersize,
+                             linestyle="None")
+                else:
+                    params[acces_dict] = None
+            if which_plot != 2:
+                color = grey_color
+            else:
+                color = (0, 0.5, 0.5)
+            plt.plot(m_save_time,
+                     m_save_distance,
+                     "-",
+                     color=color,
+                     markersize=3,
+                     linewidth=0.5)
+
+        elif name_algo in ["S_GWL"]:
+            m_save_time = []
+            m_save_distance = []
+            for e_index, e in enumerate(entropy):
+                acces_dict = name_algo + str(n_samples_s) + "_" + str(n_samples_s) + str(e)
+
+                if name_dataset == "same_graph":
+                    path_pickle = "./" + pickle_path + "/" + name_dataset + "/" + name_algo + "/" + str(
+                        n_samples_s) + "_" + str(n_samples_s) + "_" + loss_func_name + "__" + str(noise_graph) + "_" + \
+                                  str(e) + "__" + pickle_name + ".pickle"
+                else:
+                    path_pickle = "./" + pickle_path + "/" + name_dataset + "/" + name_algo + "/" + str(
+                        n_samples_s) + "_" + str(n_samples_s) + "_" + loss_func_name + "_" + str(
+                        e) + "_" + pickle_name + ".pickle"
+                if path.exists(path_pickle):
+                    with open(path_pickle, "rb") as pickle_in:
+                        params[acces_dict] = pickle.load(pickle_in)
+                        if same_param is None:
+                            same_param = params[acces_dict]
+                        elif params[acces_dict]["name_algo"] != "uniform":
+                            # Use this to check if every run use the same parameter
+                            for test in ["n_iter_algo", "rdm_seed", "same_space"]:
+                                if same_param[test] != params[acces_dict][test]:
+                                    print(params[acces_dict])
+                                    pass
+                                    print("Warning", test, same_param[test], params[acces_dict][test])
+                    time_list_only_W_approx = params[acces_dict]["time_list_only_W_approx"]
+                    time_list_only_T = params[acces_dict]["time_list_only_T"]
+                    time_list_only_W = params[acces_dict]["time_list_only_W"]
+                    time_list = time_list_only_T + time_list_only_W
+                    W_distance_list_approx = params[acces_dict]["W_distance_list_approx"]
+                    W_distance_list = params[acces_dict]["W_distance_list"]
+                    color = (0, 1 - e_index / (len(entropy) - 1), e_index / (len(entropy) - 1))
+
+                    marker = "*"
+                    # print(e_index, e)
+                    if not already_plot_SGW_legend and final_plot:
+                        already_plot_SGW_legend = True
+                        if which_plot == 2:
+                            plt.plot([], [],
+                                     marker=marker,
+                                     color=(0, 0, 0),
+                                     label=name_algo_legend,
+                                     markersize=markersize,
+                                     linestyle="None")
+                    # markersize = 10
+                    label = None
+                    # if not final_plot:
+                    #     label = name_algo_legend
+                    color = (0, 1 - e_index / (len(entropy) - 1), e_index / (len(entropy) - 1))
+                    # print("SGWL", color, entropy[e_index])
+
+                    if min_plot:
+                        W_distance_list_ = np.min(W_distance_list)
+                        time_list_only_T_ = time_list_only_T[np.argmin(W_distance_list)]
+                    else:
+                        # print(np.std(W_distance_list))
+                        W_distance_list_ = np.mean(W_distance_list)
+                        time_list_only_T_ = np.mean(time_list_only_T)
+                    m_save_time.append(time_list_only_T_)
+                    m_save_distance.append(W_distance_list_)
+                    if which_plot != 2:
+                        color = grey_color
+                    plt.plot(time_list_only_T_, W_distance_list_,
+                             marker=marker,
+                             color=color,
+                             label=label,
+                             markersize=markersize,
+                             linestyle="None")
+                else:
+                    params[acces_dict] = None
+            # acces_dict = "gromov" + str(n_samples_s) + "_" + str(n_samples_s)
+            # if params[acces_dict] is not None:
+            #     m_save_time = [np.mean(params[acces_dict]["time_list_only_T"])] + m_save_time
+            #     m_save_distance = [np.mean(params[acces_dict]["W_distance_list"])] + m_save_distance
+            if which_plot != 2:
+                color = grey_color
+            else:
+                color = (0, 0.5, 0.5)
+            plt.plot(m_save_time,
+                     m_save_distance,
+                     "-",
+                     color=color,
+                     markersize=3,
+                     linewidth=0.5)
+
+        elif name_algo in ["sampled_gromov_e_constant", "sampled_gromov_sliced", "sampled_gromov_no_KL_e_constant"]:
+            if (name_algo == "sampled_gromov_e_constant" or name_algo == "sampled_gromov_no_KL_e_constant"):
+                if which_plot == 1:
+                    plt.plot([], [],
+                             marker="",
+                             color=(0, 0, 0),
+                             label="$SaGroW^{KL}$" if name_algo == "sampled_gromov_e_constant" else "$SaGroW$",
+                             markersize=2,
+                             linestyle="None")
+                if which_plot == 0:
+                    plt.plot([], [],
+                             marker="X",
+                             color=(0, 0, 0),
+                             label="PoGroW",
+                             markersize=10,
+                             linestyle="None")
+                    plt.plot([], [],
+                             marker="x",
+                             color=(0, 0, 0),
+                             label="Minimum over 10 runs",
+                             markersize=10,
+                             linestyle="None")
+                # if final_plot:
+                #     plt.plot([], [], label=" ", linestyle="None", marker="", color=(0, 0, 0), )
+                #     if iteration[-1] == 1000:  # and loss_func_name == "square_loss":
+                #         plt.plot([], [], label=" ", linestyle="None", marker="", color=(0, 0, 0), )
+
+            for b_index, b in enumerate(batchsize):
+                m_save_time = []
+                m_save_distance = []
+                for m_index, m in enumerate(iteration):
+
+                    acces_dict = name_algo + str(n_samples_s) + "_" + str(n_samples_s) + str(b) + str(m)
+
+                    if name_dataset == "same_graph":
+                        path_pickle = "./" + pickle_path + "/" + name_dataset + "/" + name_algo + "/" + str(
+                            n_samples_s) + \
+                                      "_" + str(n_samples_s) + "_" + loss_func_name + "__" + str(
+                            noise_graph) + "_" + \
+                                      str(b) + "_" + str(m) + "_" + pickle_name + ".pickle"
+                    elif name_algo == "sampled_gromov_no_KL_e_constant" and which_plot == 1:
+                        path_pickle = "./" + pickle_path + "/" + name_dataset + "/" + name_algo + "/" + str(
+                            n_samples_s) + \
+                                      "_" + str(n_samples_s) + "_" + loss_func_name + "_" + str(b) + "_" + str(
+                            m) + "_3" + ".pickle"
+                    else:
+                        path_pickle = "./" + pickle_path + "/" + name_dataset + "/" + name_algo + "/" + str(
+                            n_samples_s) + \
+                                      "_" + str(n_samples_s) + "_" + loss_func_name + "_" + str(b) + "_" + str(
+                            m) + pickle_name + ".pickle"
+
+                    if path.exists(path_pickle):
+                        with open(path_pickle, "rb") as pickle_in:
+                            params[acces_dict] = pickle.load(pickle_in)
+                            if same_param is None:
+                                same_param = params[acces_dict]
+                            elif params[acces_dict]["name_algo"] != "uniform":
+                                # Use this to check if every run use the same parameter
+                                for test in ["n_iter_algo", "rdm_seed", "same_space"]:
+                                    if same_param[test] != params[acces_dict][test]:
+                                        print(params[acces_dict])
+                                        pass
+                                        print("Warning", test, same_param[test], params[acces_dict][test])
+                                    # assert same_param[test] == params[acces_dict][test]
+                        time_list_only_W_approx = params[acces_dict]["time_list_only_W_approx"]
+                        time_list_only_T = params[acces_dict]["time_list_only_T"]
+                        time_list_only_W = params[acces_dict]["time_list_only_W"]
+                        time_list = time_list_only_T + time_list_only_W
+                        W_distance_list_approx = params[acces_dict]["W_distance_list_approx"]
+                        W_distance_list = params[acces_dict]["W_distance_list"]
+
+                        label = None
+                        markersize = 10
+
+                        if b == 1 and name_algo == "sampled_gromov_sliced" and only_PGW:
+                            markersize = 10
+                            marker = "X"
+                            # print(1)
+                            # print((1 - (m_index / (len(iteration) - 1))) ** 0.45 / 1.3)
+                            if which_plot == 0:
+                                color = (1, (1 - (m_index / (len(iteration) - 1))) ** 0.45 / 1.3, 0)
+                            else:
+                                color = grey_color
+                            # color = (1, (1 - m_index / (len(iteration) - 1)) / 1.2, 0)
+                            if min_plot:
+                                W_distance_list_ = np.min(W_distance_list)
+                                time_list_only_T_ = time_list_only_T[np.argmin(W_distance_list)]
+                            else:
+                                W_distance_list_ = np.mean(W_distance_list)
+                                time_list_only_T_ = np.mean(time_list_only_T)
+
+                            if which_plot == 0:
+                                alpha = 0.15
+                                plt.vlines(time_list_only_T_,
+                                                 W_distance_list_ - np.std(W_distance_list),
+                                                 W_distance_list_ + np.std(W_distance_list),
+                                                 alpha=alpha,
+                                                 # marker="_",
+                                                 color=color,)
+                                plt.plot([time_list_only_T_, time_list_only_T_],
+                                         [W_distance_list_ + np.std(W_distance_list),
+                                          W_distance_list_ - np.std(W_distance_list)],
+                                         alpha=alpha,
+                                         color=color,
+                                         marker="_")
+                            plt.plot(time_list_only_T_, W_distance_list_,
+                                     marker=marker,
+                                     color=color,
+                                     label=None,
+                                     markersize=markersize,
+                                     linestyle="None")
+                            plt.plot([np.mean(time_list_only_T), np.sum(time_list_only_T)],
+                                     [np.mean(W_distance_list), np.min(W_distance_list)],
+                                     color=color,
+                                     marker=None,
+                                     linestyle="dotted")
+                            plt.plot(np.sum(time_list_only_T), np.min(W_distance_list),
+                                     color=color,
+                                     marker="x",
+                                     linestyle=None)
+
+
+                        else:
+                            markersize = 10
+                            marker = (b_index + 3, 0, 0)
+                            # if which_plot == 1:
+                            color = (1, (1 - (m_index / (len(iteration) - 1))) ** 0.45 / 1.3, 0)
+                            # else:
+                            #     color = grey_color
+                            # color = (1, ((1 - m_index / (len(iteration) - 1))) / 1.5, 0)
+                            if (
+                                    name_algo == "sampled_gromov_e_constant" or name_algo == "sampled_gromov_no_KL_e_constant"):
+                                if m_index == 0 and which_plot == 1:
+                                    plt.plot([None], [None],
+                                             marker=marker,
+                                             color=(0, 0, 0),
+                                             label=str(b) + " sample" + ((b != 1) * "s"),
+                                             markersize=markersize,
+                                             linestyle="None")
+                                if b_index == (len(batchsize) - 1) and which_plot < 2:
+                                    if iteration[-1] == 1000 and m_index == 0:  # and loss_func_name == "loss_square":
+                                        plt.plot([], [], label=" ", linestyle="None", marker="", color=(0, 0, 0), )
+                                    plt.plot([None], [None],
+                                             marker="s",  # (3, 0, 0),
+                                             color=color,
+                                             label=str(m) + " iterations",
+                                             markersize=8)
+
+                            else:
+                                if only_PGW:
+                                    continue
+
+                                    # marker = (b_index + 2, 0, 0)
+                                    # color = (1, ((1 - m_index / (len(iteration) - 1))) / 1.5, 0)
+                                    #
+                                    # if m_index == 0:
+                                    #     plt.plot([None], [None],
+                                    #              marker=marker,
+                                    #              color=(0, 0, 0),
+                                    #              label=str(b) + " sample" + ((b != 1) * "s"),
+                                    #              markersize=markersize,
+                                    #              linestyle="None")
+                                    # if b_index == (len(batchsize) - 1):
+                                    #     plt.plot([None], [None],
+                                    #              marker=(3, 0, 0),
+                                    #              color=color,
+                                    #              label=str(m) + " iterations",
+                                    #              markersize=markersize,
+                                    #              linestyle="None")
+                            #     marker = (b_index + 2, 0, 0)
+                            #     color = (0, 0, 1 - m_index / (len(iteration) - 1))
+                            #     if b_index == 2 and m_index == 2:
+                            #         label = "$SGW$"
+                            if min_plot:
+                                W_distance_list_ = np.min(W_distance_list)
+                                time_list_only_T_ = time_list_only_T[np.argmin(W_distance_list)]
+                            else:
+                                W_distance_list_ = np.mean(W_distance_list)
+                                time_list_only_T_ = np.mean(time_list_only_T)
+                            m_save_time.append(time_list_only_T_)
+                            m_save_distance.append(W_distance_list_)
+                            if which_plot == 1:
+                                color = (1, (1 - (m_index / (len(iteration) - 1))) ** 0.45 / 1.3, 0)
+                            else:
+                                color = grey_color
+                            if which_plot == 1:
+                                alpha = 0.15
+                                plt.vlines(time_list_only_T_,
+                                                 W_distance_list_ - np.std(W_distance_list),
+                                                 W_distance_list_ + np.std(W_distance_list),
+                                                 alpha=alpha,
+                                                 # marker="_",
+                                                 color=color,)
+                                plt.plot([time_list_only_T_, time_list_only_T_],
+                                         [W_distance_list_ + np.std(W_distance_list),
+                                          W_distance_list_ - np.std(W_distance_list)],
+                                         alpha=alpha,
+                                         color=color,
+                                         marker="_")
+                            plt.plot(time_list_only_T_, W_distance_list_,
+                                     marker=marker,
+                                     color=color,
+                                     label=label,
+                                     markersize=markersize,
+                                     linestyle="None")
+                    else:
+                        params[acces_dict] = None
+                if which_plot == 1:
+                    color = (1, 0.5, 0)
+                else:
+                    color = grey_color
+
+                plt.plot(m_save_time, m_save_distance,
+                         "-",
+                         color=color,
+                         markersize=3,
+                         linewidth=0.5)
+
+        elif name_algo in ["e_gromov_KL", "e_gromov", "gromov", "S_GWL"]:
+            acces_dict = name_algo + str(n_samples_s) + "_" + str(n_samples_s)
+
+            if name_dataset == "same_graph":
+                path_pickle = "./" + pickle_path + "/" + name_dataset + "/" + name_algo + "/" + str(
+                    n_samples_s) + \
+                              "_" + str(n_samples_s) + "_" + loss_func_name + "__" + str(noise_graph) + "_" + \
+                              pickle_name + ".pickle"
+            else:
+                path_pickle = "./" + pickle_path + "/" + name_dataset + "/" + name_algo + "/" + str(
+                    n_samples_s) + \
+                              "_" + str(n_samples_s) + "_" + loss_func_name + pickle_name + ".pickle"
+
+            if path.exists(path_pickle):
+                with open(path_pickle, "rb") as pickle_in:
+
+                    params[acces_dict] = pickle.load(pickle_in)
+                    if same_param is None:
+                        same_param = params[acces_dict]
+                    elif params[acces_dict]["name_algo"] != "uniform":
+                        # Use this to check if every run use the same parameter
+                        for test in ["n_iter_algo", "rdm_seed", "same_space"]:
+                            if same_param[test] != params[acces_dict][test]:
+                                print(params[acces_dict])
+                                pass
+                                print("Warning", test, same_param[test], params[acces_dict][test])
+                            # assert same_param[test] == params[acces_dict][test]
+                time_list_only_W_approx = params[acces_dict]["time_list_only_W_approx"]
+                time_list_only_T = params[acces_dict]["time_list_only_T"]
+                time_list_only_W = params[acces_dict]["time_list_only_W"]
+                time_list = time_list_only_T + time_list_only_W
+                W_distance_list_approx = params[acces_dict]["W_distance_list_approx"]
+                W_distance_list = params[acces_dict]["W_distance_list"]
+                label = name_algo_legend
+                # if name_algo_legend[0] == "$":
+                #     marker = name_algo_legend
+                # else:
+                #     marker = "$" + name_algo_legend + "$"
+                # markersize = 50
+                # color = (0.5,1,0.5)
+
+                if name_algo == "S_GWL":
+                    color = (0, 0, 0)
+                    marker = "+"
+                elif name_algo == "e_gromov_KL":
+                    color = (0, 0, 1)
+                elif name_algo == "gromov":
+                    if which_plot == 2:
+                        color = (0, 1, 0)
+                    else:
+                        color = grey_color
+                        label = ""
+                    marker = "+"
+                elif name_algo == "sampled_gromov":
+                    color = (0, 1, 0.5)
+                    marker = "+"
+                # elif name_algo == "uniform":
+                #     marker = ""
+
+                if not name_algo in ["uniform", "identity"]:
+                    if min_plot:
+                        W_distance_list_ = np.min(W_distance_list)
+                        time_list_only_T_ = time_list_only_T[np.argmin(W_distance_list)]
+                    else:
+                        W_distance_list_ = np.mean(W_distance_list)
+                        time_list_only_T_ = np.mean(time_list_only_T)
+                    plt.plot(np.mean(time_list_only_T_), np.mean(W_distance_list_),
+                             marker=marker,
+                             label=label,
+                             markersize=markersize,
+                             linestyle="None",
+                             color=color)
+                # if name_algo == "gromov":
+                #     # color = (1, 1/1.4, 0)
+                #     color = (219. / 255., 112. / 255., 147. / 255.)
+                #     entropy_string = ["Low $\epsilon$", "Medium $\epsilon$", "High $\epsilon$"]
+                #     entropy_color = [(0, 1, 0), (0, 0.5, 0.5), (0, 0, 1)]
+                #     for ent in range(3):
+                #         plt.plot([], [],
+                #                  marker="s",
+                #                  label=entropy_string[ent],
+                #                  color=entropy_color[ent],
+                #                  markersize=8)
+                # else:
+                #     label = name_algo_legend
+                #
+                #     else:
+                #         color = (1, 0, 0)
+                #     if min_plot:
+                #         W_distance_list_ = np.min(W_distance_list)
+                #         time_list_only_T_ = time_list_only_T[np.argmin(W_distance_list)]
+                #     else:
+                #         W_distance_list_ = np.mean(W_distance_list)
+                #         time_list_only_T_ = np.mean(time_list_only_T)
+                #     plt.axhline(y=W_distance_list_, color=color, linestyle="-", label=label)
+                # plt.plot([1e-2, 1e4], [W_distance_list_] * 2,
+                #          label=label,
+                #          markersize=markersize,
+                #          color=color)
+            else:
+                # print("outer")
+                params[acces_dict] = None
+
+        elif name_algo in ["uniform"]:
+            color = (0.9, 0.5, 0.9)
+            acces_dict = name_algo + str(n_samples_s) + "_" + str(n_samples_s)
+
+            if name_dataset == "same_graph":
+                path_pickle = "./" + pickle_path + "/" + name_dataset + "/" + name_algo + "/" + str(
+                    n_samples_s) + \
+                              "_" + str(n_samples_s) + "_" + loss_func_name + "__" + str(noise_graph) + "_" + \
+                              pickle_name + ".pickle"
+            else:
+                path_pickle = "./" + pickle_path + "/" + name_dataset + "/" + name_algo + "/" + str(
+                    n_samples_s) + \
+                              "_" + str(n_samples_s) + "_" + loss_func_name + pickle_name + ".pickle"
+
+            if path.exists(path_pickle):
+                with open(path_pickle, "rb") as pickle_in:
+                    params[acces_dict] = pickle.load(pickle_in)
+                    if same_param is None:
+                        same_param = params[acces_dict]
+                    elif params[acces_dict]["name_algo"] != "uniform":
+                        # Use this to check if every run use the same parameter
+                        for test in ["n_iter_algo", "rdm_seed", "same_space"]:
+                            if same_param[test] != params[acces_dict][test]:
+                                print(params[acces_dict])
+                                pass
+                                print("Warning", test, same_param[test], params[acces_dict][test])
+                            # assert same_param[test] == params[acces_dict][test]
+                time_list_only_T = params[acces_dict]["time_list_only_T"]
+                time_list_only_W = params[acces_dict]["time_list_only_W"]
+                W_distance_list = params[acces_dict]["W_distance_list"]
+                label = name_algo_legend
+                W_distance_list_ = np.mean(W_distance_list)
+                time_list_only_T_ = np.mean(time_list_only_T)
+                plt.axhline(y=W_distance_list_, color=color, linestyle="-", label=label)
+
+    plt.xscale("log")
+
+    if final_plot:
+        plt.xlabel("Computational time (s)", fontsize=16)
+        plt.ylabel("Gromov Wasserstein value: $\mathcal{E}$ (T)", fontsize=16)
+        plt.xticks(fontsize=13)
+        plt.yticks(fontsize=13)
+        from matplotlib.legend_handler import HandlerLine2D
+        import matplotlib.lines
+
+        class SymHandler(HandlerLine2D):
+            def create_artists(self, legend, orig_handle, xdescent, ydescent, width, height, fontsize, trans):
+                xx = 0.6 * height
+                return super(SymHandler, self).create_artists(legend, orig_handle, xdescent, xx, width, height,
+                                                              fontsize, trans)
+
+        # if which_plot == 0:
+
+        handles, labels = plt.gca().get_legend_handles_labels()
+        if which_plot == 0:
+            bbox_to_anchor = (-0.3, 0.9, 1.3, 0.3)  # (-0.12, 0.9, 1.2, 0.3)
+            plt.plot([], [], label=" ", linestyle="None", marker="", color=(0, 0, 0))
+            handles, labels = plt.gca().get_legend_handles_labels()
+            order = [0, 2, 1, 3, 6, 4, 7, 5]
+            plt.legend([handles[idx] for idx in order], [labels[idx] for idx in order],
+                       handler_map={matplotlib.lines.Line2D: SymHandler()},
+                       bbox_to_anchor=bbox_to_anchor, ncol=4, handleheight=2, labelspacing=0,
+                       prop={'size': 12.5},
+                       frameon=False)
+        elif which_plot == 1:
+            bbox_to_anchor = (-0.19, 0.9, 1.2, 0.3)  # (-0.12, 0.9, 1.2, 0.3)
+            plt.plot([], [], label=" ", linestyle="None", marker="", color=(0, 0, 0))
+            handles, labels = plt.gca().get_legend_handles_labels()
+            order = [0, 9, 1, 4, 2, 5, 3, 6, 8, 7] #np.arange(len(labels))#
+            plt.legend([handles[idx] for idx in order], [labels[idx] for idx in order],
+                       handler_map={matplotlib.lines.Line2D: SymHandler()},
+                       bbox_to_anchor=bbox_to_anchor, ncol=5, handleheight=2, labelspacing=0,
+                       columnspacing=1.5,
+                       prop={'size': 12.5},
+                       frameon=False)
+        elif which_plot == 2:
+            bbox_to_anchor = (-0.40, 0.9, 1.2, 0.3)  # (-0.12, 0.9, 1.2, 0.3)
+            bbox_to_anchor = (21, 1.1, 1.4, 0.2)  # (-0.12, 0.9, 1.2, 0.3)
+            order = [5, 1, 6, 2, 4, 3, 0, 7]
+            order = [2, 3, 1, 0, 4]
+            import matplotlib.colors as mcolors
+            import matplotlib as mpl
+
+            def make_colormap(seq):
+                """Return a LinearSegmentedColormap
+                seq: a sequence of floats and RGB-tuples. The floats should be increasing
+                and in the interval (0,1).
+                """
+                seq = [(None,) * 3, 0.0] + list(seq) + [1.0, (None,) * 3]
+                # print(seq)
+                cdict = {'red': [], 'green': [], 'blue': []}
+                for i, item in enumerate(seq):
+                    if isinstance(item, float):
+                        r1, g1, b1 = seq[i - 1]
+                        r2, g2, b2 = seq[i + 1]
+                        cdict['red'].append([item, r1, r2])
+                        cdict['green'].append([item, g1, g2])
+                        cdict['blue'].append([item, b1, b2])
+                return mcolors.LinearSegmentedColormap('CustomMap', cdict)
+
+            # c = mcolors.ColorConverter().to_rgb
+            rvb = make_colormap(
+                # [(0, 1, 0), (0, 0.5, 0.5), float(10**(-3)), (0, 0.5, 0.5), (0, 0, 1), float(10**2), (0, 0, 1), 10**2])
+            [(0, 1, 0), (0, 0.5, 0.5), 0.33, (0, 0.5, 0.5), (0, 0, 1), 0.66, (0, 0, 1)])
+            norm = mpl.colors.LogNorm(vmin=0.001, vmax=100)
+            # norm = plt.Normalize(vmin=0, vmax=1)
+            sm = plt.cm.ScalarMappable(cmap=rvb, norm=norm)
+
+            sm._A = []
+            # cbaxes = plt.add_axes
+            cbaxes = fig.add_axes([0.15, 0.2, 0.03, 0.6])
+            # , shrink = 0.8, anchor = (0, 0.5)
+            cbar = plt.colorbar(sm, cax=cbaxes)#, pad=-0.5)#, norm=mpl.colors.Normalize(vmin=-0.5, vmax=1.5))
+            cbar.set_label('Epsilon : $\epsilon$', rotation=90, labelpad=-70)
+            # cbar.set_clim(-2.0, 2.0)
+            # plt.clim(-4, 4)
+            plt.legend([handles[idx] for idx in order], [labels[idx] for idx in order],
+                       handler_map={matplotlib.lines.Line2D: SymHandler()},
+                       bbox_to_anchor=bbox_to_anchor, ncol=5, handleheight=2, labelspacing=0,
+                       prop={'size': 12.5},
+                       frameon=False)
+        # else:
+        #     order = np.arange(len(labels))
+
+
+
+
+    else:
+        plt.xlabel("Computational time (s)")
+        plt.ylabel("Gromov Wasserstein value: $\mathcal{E}$ (T)")
+        # plt.xticks(fontsize=16)
+        plt.legend()
+    if save:
+        if "sampled_gromov_no_KL_e_constant" in names_algo:
+            plt.savefig(
+                "./figure/Analysis_hyper/noKL_" + str(min_plot) + "_" + loss_func_name + "_" + str(n_samples_s) + "_" +
+                name_dataset + "_" + str(which_plot) + ".pdf", bbox_inches="tight")
+        else:
+            plt.savefig(
+                "./figure/Analysis_hyper/" + str(min_plot) + "_" + loss_func_name + "_" + str(n_samples_s) + "_" +
+                name_dataset + "_" + str(which_plot) + ".pdf", bbox_inches="tight")
     plt.show()
 
 
@@ -1314,9 +1949,10 @@ def analyse_data_hyper(name_dataset="gaussian",
                        iteration=[1000],
                        paper_plot=False,
                        show_legend=True,
-                       legend_SGW=False
+                       legend_SGW=False,
+                       markersize=10,
+                       linestyle="dotted"
                        ):
-
     n_samples_s = np.array(n_samples_s)
     if name_dataset in ["gaussian_graph", "same_graph"]:
         try:
@@ -1526,18 +2162,20 @@ def analyse_data_hyper(name_dataset="gaussian",
                     time_list_only_T[i] = params[acces_dict]["time_list_only_T"]
                     time_list_only_W[i] = params[acces_dict]["time_list_only_W"]
                     time_list[i] = time_list_only_T[i] + time_list_only_W[i]
-                linestyle = "--"
+                # linestyle = "--"
                 plt.figure(0, figsize=figsize)
                 if name_algo == "e_gromov":
                     color = (0, 0.5, 0.8)
+                    marker = "o"
                 if name_algo == "e_gromov_KL":
-                    color = (0, 0.8, 0.5)
+                    color = (0, 0, 1)#(0, 0.8, 0.5)
+                    marker = "P"
                 if paper_plot:
                     legend_param = ""
                 else:
                     legend_param = "$_{" + str(e) + "}$"
                 plt.plot(n_samples_s[mask], np.mean(time_list, axis=1)[mask], linestyle=linestyle,
-                         label=name_algo_legend + legend_param, color=color)
+                         label=name_algo_legend + legend_param, color=color, marker=marker, markersize=markersize)
                 plt.fill_between(n_samples_s[mask],
                                  (np.mean(time_list, axis=1) - np.std(time_list, axis=1))[mask],
                                  (np.mean(time_list, axis=1) + np.std(time_list, axis=1))[mask],
@@ -1546,7 +2184,7 @@ def analyse_data_hyper(name_dataset="gaussian",
                 plt.figure(1, figsize=figsize)
 
                 plt.plot(n_samples_s[mask], np.mean(time_list_only_T, axis=1)[mask], linestyle=linestyle,
-                         label=name_algo_legend + legend_param, color=color)
+                         label=name_algo_legend + legend_param, color=color, marker=marker, markersize=10)
                 plt.fill_between(n_samples_s[mask],
                                  (np.mean(time_list_only_T, axis=1) - np.std(time_list_only_T, axis=1))[mask],
                                  (np.mean(time_list_only_T, axis=1) + np.std(time_list_only_T, axis=1))[mask],
@@ -1571,15 +2209,16 @@ def analyse_data_hyper(name_dataset="gaussian",
                     time_list_only_T[i] = params[acces_dict]["time_list_only_T"]
                     time_list_only_W[i] = params[acces_dict]["time_list_only_W"]
                     time_list[i] = time_list_only_T[i] + time_list_only_W[i]
-                linestyle = "--"
+                # linestyle = "--"
                 plt.figure(0, figsize=figsize)
                 color = (0, 0, 0)
+                marker = "*"
                 if paper_plot:
                     legend_param = ""
                 else:
                     legend_param = "$_{" + str(e) + "}$"
                 plt.plot(n_samples_s[mask], np.mean(time_list, axis=1)[mask], linestyle=linestyle,
-                         label=name_algo_legend + legend_param, color=color)
+                         label=name_algo_legend + legend_param, color=color, marker=marker, markersize=10)
                 plt.fill_between(n_samples_s[mask],
                                  (np.mean(time_list, axis=1) - np.std(time_list, axis=1))[mask],
                                  (np.mean(time_list, axis=1) + np.std(time_list, axis=1))[mask],
@@ -1587,7 +2226,7 @@ def analyse_data_hyper(name_dataset="gaussian",
 
                 plt.figure(1, figsize=figsize)
                 plt.plot(n_samples_s[mask], np.mean(time_list_only_T, axis=1)[mask], linestyle=linestyle,
-                         label=name_algo_legend + legend_param, color=color)
+                         label=name_algo_legend + legend_param, color=color, marker=marker, markersize=10)
                 plt.fill_between(n_samples_s[mask],
                                  (np.mean(time_list_only_T, axis=1) - np.std(time_list_only_T, axis=1))[mask],
                                  (np.mean(time_list_only_T, axis=1) + np.std(time_list_only_T, axis=1))[mask],
@@ -1623,18 +2262,20 @@ def analyse_data_hyper(name_dataset="gaussian",
                         time_list_only_W[i] = params[acces_dict]["time_list_only_W"]
                         time_list[i] = time_list_only_T[i] + time_list_only_W[i]
                     # print(mask)
-                    linestyle = "-"
+                    # linestyle = "-"
                     plt.figure(0, figsize=figsize)
                     if paper_plot:
                         if name_algo == "sampled_gromov_sliced":
                             color = (1, 0.5, 0)
+                            marker = "X"
                         else:
                             color = (1, 0, 0)
+                            marker = "s"
                     else:
                         color = (1, b_index / len(batchsize), 0)
 
                     plt.plot(n_samples_s[mask], np.mean(time_list, axis=1)[mask], linestyle=linestyle,
-                             label=name_algo_legend, color=color)
+                             label=name_algo_legend, color=color, marker=marker, markersize=markersize)
                     plt.fill_between(n_samples_s[mask],
                                      (np.mean(time_list, axis=1) - np.std(time_list, axis=1))[mask],
                                      (np.mean(time_list, axis=1) + np.std(time_list, axis=1))[mask],
@@ -1643,7 +2284,7 @@ def analyse_data_hyper(name_dataset="gaussian",
                     plt.figure(1, figsize=figsize)
 
                     plt.plot(n_samples_s[mask], np.mean(time_list_only_T, axis=1)[mask], linestyle=linestyle,
-                             label=name_algo_legend, color=color)
+                             label=name_algo_legend, color=color, marker=marker, markersize=markersize)
                     plt.fill_between(n_samples_s[mask],
                                      (np.mean(time_list_only_T, axis=1) - np.std(time_list_only_T, axis=1))[mask],
                                      (np.mean(time_list_only_T, axis=1) + np.std(time_list_only_T, axis=1))[mask],
@@ -1669,20 +2310,25 @@ def analyse_data_hyper(name_dataset="gaussian",
                 time_list_only_W[i] = params[acces_dict]["time_list_only_W"]
                 time_list[i] = time_list_only_T[i] + time_list_only_W[i]
             if "S_GWL" in name_algo:
-                linestyle = "--"
+                # linestyle = "--"
                 color = (0, 0, 0)
+                marker = "*"
             elif "uniform" in name_algo:
-                linestyle = "dotted"
+                # linestyle = "dotted"
                 color = (0.1, 0.5, 0.1)
+                marker = "d"
             elif "sliced_gromov" == name_algo:
                 color = (0.40, 0.2, 0)
-                linestyle = "dotted"
+                # linestyle = "dotted"
+                marker = "^"
             else:
-                linestyle = "--"
-                color = (0, 0, 1)
+                # linestyle = "--"
+                color = (0, 0.8, 0.5)#(0, 0, 1)
+                marker = "+"
+
             plt.figure(0, figsize=figsize)
             plt.plot(n_samples_s[mask], np.mean(time_list, axis=1)[mask], linestyle=linestyle, label=name_algo_legend,
-                     color=color)
+                     color=color, marker=marker, markersize=markersize)
             plt.fill_between(n_samples_s[mask],
                              (np.mean(time_list, axis=1) - np.std(time_list, axis=1))[mask],
                              (np.mean(time_list, axis=1) + np.std(time_list, axis=1))[mask],
@@ -1697,7 +2343,7 @@ def analyse_data_hyper(name_dataset="gaussian",
             #     print(n_samples_s[i])
             #     print(np.mean(time_list_only_T, axis=1)[i], np.std(time_list_only_T, axis=1)[i])
             plt.plot(n_samples_s[mask], np.mean(time_list_only_T, axis=1)[mask], linestyle=linestyle,
-                     label=name_algo_legend, color=color)
+                     label=name_algo_legend, color=color, marker=marker, markersize=markersize)
             plt.fill_between(n_samples_s[mask],
                              (np.mean(time_list_only_T, axis=1) - np.std(time_list_only_T, axis=1))[mask],
                              (np.mean(time_list_only_T, axis=1) + np.std(time_list_only_T, axis=1))[mask],
@@ -1750,18 +2396,20 @@ def analyse_data_hyper(name_dataset="gaussian",
                     #     W_distance_list_approx[i, :] = params[acces_dict]["W_distance_list_approx"] * 20
                     W_distance_list[i, :] = params[acces_dict]["W_distance_list"]
 
-                linestyle = "--"
+                # linestyle = "--"
                 if name_algo == "e_gromov":
                     color = (0, 0.5, 0.8)
+                    marker = "o"
                 if name_algo == "e_gromov_KL":
-                    color = (0, 0.8, 0.5)
+                    color = (0,0,1)#(0, 0.8, 0.5)
+                    marker = "P"
                 # print(np.mean(W_distance_list[mask], axis=1), name_algo, e)
                 if paper_plot:
                     legend_param = ""
                 else:
                     legend_param = "$_{" + str(e) + "}$"
                 plt.plot(n_samples_s[mask], np.mean(W_distance_list[mask], axis=1), linestyle=linestyle,
-                         label=names_algo_legend[a] + legend_param, color=color)
+                         label=names_algo_legend[a] + legend_param, color=color, marker=marker, markersize=markersize)
                 plt.fill_between(n_samples_s[mask],
                                  (np.mean(W_distance_list, axis=1) - np.std(W_distance_list, axis=1))[mask],
                                  (np.mean(W_distance_list, axis=1) + np.std(W_distance_list, axis=1))[mask],
@@ -1786,15 +2434,16 @@ def analyse_data_hyper(name_dataset="gaussian",
                     #     W_distance_list_approx[i, :] = params[acces_dict]["W_distance_list_approx"] * 20
                     W_distance_list[i, :] = params[acces_dict]["W_distance_list"]
 
-                linestyle = "--"
+                # linestyle = "--"
                 color = (0, 0, 0)
+                marker = "*"
                 # print(np.mean(W_distance_list[mask], axis=1), np.mean(np.mean(W_distance_list[mask], axis=1)), name_algo, e)
                 if paper_plot:
                     legend_param = ""
                 else:
                     legend_param = "$_{" + str(e) + "}$"
                 plt.plot(n_samples_s[mask], np.mean(W_distance_list[mask], axis=1), linestyle=linestyle,
-                         label=names_algo_legend[a] + legend_param, color=color)
+                         label=names_algo_legend[a] + legend_param, color=color, marker=marker, markersize=markersize)
                 plt.fill_between(n_samples_s[mask],
                                  (np.mean(W_distance_list, axis=1) - np.std(W_distance_list, axis=1))[mask],
                                  (np.mean(W_distance_list, axis=1) + np.std(W_distance_list, axis=1))[mask],
@@ -1831,19 +2480,21 @@ def analyse_data_hyper(name_dataset="gaussian",
                         #     W_distance_list_approx[i, :] = params[acces_dict]["W_distance_list_approx"] * 20
                         W_distance_list[i, :] = params[acces_dict]["W_distance_list"]
 
-                    linestyle = "-"
+                    # linestyle = "-"
                     if paper_plot:
                         if name_algo == "sampled_gromov_sliced":
                             color = (1, 0.5, 0)
+                            marker = "X"
                         else:
                             color = (1, 0, 0)
+                            marker = "s"
                     else:
                         color = (1, b_index / len(batchsize), 0)
 
                     plt.plot(n_samples_s[mask], np.mean(W_distance_list[mask], axis=1), linestyle=linestyle,
                              label=names_algo_legend[a],
                              # label=None,
-                             color=color)
+                             color=color, marker=marker, markersize=markersize)
                     plt.fill_between(n_samples_s[mask],
                                      (np.mean(W_distance_list, axis=1) - np.std(W_distance_list, axis=1))[mask],
                                      (np.mean(W_distance_list, axis=1) + np.std(W_distance_list, axis=1))[mask],
@@ -1869,36 +2520,40 @@ def analyse_data_hyper(name_dataset="gaussian",
                 W_distance_list[i, :] = params[acces_dict]["W_distance_list"]
 
             if "S_GWL" in name_algo:
-                linestyle = "--"
+                # linestyle = "--"
+                marker = ""
                 color = (0, 0, 0)
             elif "uniform" in name_algo:
-                linestyle = "-."
+                # linestyle = "-."
+                marker = "d"
                 color = (0.9, 0.5, 0.9)
             elif "identity" in name_algo:
-                linestyle = "-."
+                # linestyle = "-."
+                marker = ""
                 color = (0.40, 0.2, 0)
 
             elif "sliced_gromov" in name_algo:
-                linestyle = "dotted"
+                # linestyle = "dotted"
                 color = (0.40, 0.2, 0)
-
+                marker = "^"
 
             else:
-                linestyle = "--"
-                color = (0, 0, 1)
+                marker = "+"
+                # linestyle = "--"
+                color = (0, 0.8, 0.5)#(0, 0, 1)
 
             if name_algo == "sliced_gromov":
                 plt.plot(n_samples_s[mask], np.mean(W_distance_list_approx, axis=1)[mask], linestyle=linestyle,
-                         label=names_algo_legend[a], color=color)
+                         label=names_algo_legend[a], color=color, marker=marker, markersize=markersize)
                 plt.fill_between(n_samples_s[mask],
                                  (np.mean(W_distance_list_approx, axis=1) - np.std(W_distance_list_approx, axis=1))[
                                      mask],
                                  (np.mean(W_distance_list_approx, axis=1) + np.std(W_distance_list_approx, axis=1))[
                                      mask],
                                  alpha=0.3, color=color)
-                W_distance_list_approx = W_distance_list_approx * 15
+                W_distance_list_approx = W_distance_list_approx * 25
                 plt.plot(n_samples_s[mask], np.mean(W_distance_list_approx, axis=1)[mask], linestyle=linestyle,
-                         label="15" + names_algo_legend[a], color=color)
+                         label="25" + names_algo_legend[a], color=color, marker=marker, markersize=markersize)
                 plt.fill_between(n_samples_s[mask],
                                  (np.mean(W_distance_list_approx, axis=1) - np.std(W_distance_list_approx, axis=1))[
                                      mask],
@@ -1907,17 +2562,16 @@ def analyse_data_hyper(name_dataset="gaussian",
                                  alpha=0.3, color=color)
             else:
                 plt.plot(n_samples_s[mask], np.mean(W_distance_list[mask], axis=1), linestyle=linestyle,
-                         label=names_algo_legend[a], color=color)
+                         label=names_algo_legend[a], color=color, marker=marker, markersize=markersize)
                 plt.fill_between(n_samples_s[mask],
                                  (np.mean(W_distance_list, axis=1) - np.std(W_distance_list, axis=1))[mask],
                                  (np.mean(W_distance_list, axis=1) + np.std(W_distance_list, axis=1))[mask],
                                  alpha=0.3, color=color)
 
-
                 # here just to add Sliced GW in the legend. Kind of ugly...
 
                 if "gaussian_graph" == name_dataset and paper_plot and legend_SGW:
-                    linestyle = "dotted"
+                    # linestyle = "dotted"
                     color = (0.40, 0.2, 0)
                     plt.plot([None], [None], linestyle=linestyle,
                              label="SGW", color=color)
@@ -1938,7 +2592,11 @@ def analyse_data_hyper(name_dataset="gaussian",
     # if show_legend:
     #     plt.legend(loc=(-0.8, 0.05), fontsize=fontsize_legend)
     if show_legend:
-        plt.legend(loc=(1.01, 0.15), fontsize=fontsize_legend)
+        if name_dataset == "gaussian_graph":
+            plt.legend(loc=(1.01, 0.15), fontsize=fontsize_legend)
+        else:
+            plt.legend(loc=(1.01, 0.05), fontsize=fontsize_legend)
+
     # plt.title("Wasserstein distance")
 
     # if name_dataset == "same_graph":
@@ -2419,14 +3077,14 @@ def main(args):
             diff_to_identity[i] = 100 * np.mean((1 / args.n_samples_s) - T[np.arange(args.n_samples_s),
                                                                            np.arange(args.n_samples_s)])
 
-    print("W_distance_list", W_distance_list)
-    print("Mean W_distance_list", np.mean(W_distance_list))
-    print("W_distance_list_approx", W_distance_list_approx)
-    print("Time dataset", time_only_dataset)
-    print("Time only T", time_list_only_T)
-    print("Mean Time only T", np.mean(time_list_only_T))
-    print("Time only W approximation", time_list_only_W_approx)
-    print("Time only real W", time_list_only_W)
+    # print("W_distance_list", W_distance_list)
+    print("Mean Wasserstein distance", np.mean(W_distance_list))
+    print("Mean Wasserstein distance approximated", np.mean(W_distance_list_approx))
+    # print("Time dataset", time_only_dataset)
+    # print("Time only T", time_list_only_T)
+    print("Mean computational time for finding T", np.mean(time_list_only_T))
+    print("Mean computational time for the approximated Wasserstein distance", np.mean(time_list_only_W_approx))
+    print("Mean computational time for the real Wasserstein distance", np.mean(time_list_only_W))
     return W_distance_list_approx, W_distance_list, time_only_dataset, time_list_only_T, time_list_only_W_approx, \
            time_list_only_W, diff_to_identity
 
@@ -2884,7 +3542,6 @@ if __name__ == "__main__":
     parser.add_argument('--dimension_t', type=int, default=10)
     parser.add_argument('--name_algo', type=str, default="sampled_gromov")
 
-    parser.add_argument('--T_is_sparse', type=bool, default=False)
     parser.add_argument('--plot', type=bool, default=False)
     parser.add_argument('--rdm_seed', type=int, default=12345)
     parser.add_argument('--pickle_path', type=str, default="pickle_compare")

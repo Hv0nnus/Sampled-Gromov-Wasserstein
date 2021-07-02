@@ -1,2 +1,6 @@
 The informations needed to understand the code are in the Sampled Gromov Wasserstein notebook.
 
+- This notebook summarises the code of the paper Sampled Gromov Wasserstein accepted at the Journal Track of ECML-PKDD 2021 and allows to reproduce every tables and figures in the paper and in the supplementary material. An open source version is available at https://hal.archives-ouvertes.fr/hal-03232509/document.
+- To allow further reuse, we plan to integrate it into the **POT library** (https://pythonot.github.io/) very soon, check the latest POT library version if you want to use the algorithm and do not care about reproducing the experiments of this paper.
+- Do not hesitate to send a mail if you have any questions about the code or the paper : tanguy.kerdoncuff@laposte.net
+
